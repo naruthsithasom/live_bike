@@ -1,5 +1,6 @@
 {
   "tiktokUsername": "",
+  "adminPassword": "",
   "eventLog": {
     "enabled": true,
     "raw": true

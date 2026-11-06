@@ -7,7 +7,7 @@
 
 // ---------------------------------------------------------------- setup
 // เวอร์ชันของไฟล์เกม — แก้โค้ดเมื่อไหร่ให้เปลี่ยนค่านี้ หน้า /admin จะเตือนถ้าหน้าเกมยังใช้ไฟล์เก่า (ยังไม่ได้กด F5)
-const GAME_BUILD = '2026-11-06.4';
+const GAME_BUILD = '2026-11-06.5';
 const W = 540, H = 960;
 const cv = document.getElementById('game');
 let ctx = cv.getContext('2d');
@@ -1425,12 +1425,31 @@ function refreshRaceCfg() {
   fetch('/race').then(r => r.json()).then(d => { RACE.tiers = d.tiers || []; RACE.byName = d.byName || {}; RACE.maxRiders = d.maxRiders || 30; RACE.owner = d.owner || RACE.owner; }).catch(() => {});
 }
 function connectLive() {
-  if (typeof EventSource !== 'function') return;
+  if (typeof fetch !== 'function') return;
   fetchLiveConfig(); fetchGiftList(); loadRecentFollows();
+  openLiveStream();
+}
+// รับเหตุการณ์สดจากเซิร์ฟเวอร์: SSE ก่อน · ไม่มีข้อความใน 6 วิ (เช่น ลิงก์ public ผ่านอุโมงค์ฟรีของ Cloudflare
+// ที่ไม่รองรับ SSE) → สลับเป็น long-poll (/events/poll) อัตโนมัติ
+function openLiveStream() {
+  let got = false, polling = false;
+  const handle = m => { try { onLiveMessage(m); } catch (e) { /* ignore */ } };
+  const startPoll = () => {
+    if (polling || typeof fetch !== 'function') return;
+    polling = true;
+    let id = null;
+    const loop = () => fetch('/events/poll' + (id === null ? '' : '?since=' + id), { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => { S.live.server = true; id = d.id; (d.items || []).forEach(handle); loop(); })
+      .catch(() => { S.live.server = false; setTimeout(loop, 3000); });
+    loop();
+  };
+  if (typeof EventSource !== 'function') return startPoll();
   const es = new EventSource('/events');
   es.onopen = () => { S.live.server = true; };
-  es.onerror = () => { S.live.server = false; };
-  es.onmessage = ev => { try { onLiveMessage(JSON.parse(ev.data)); } catch (e) { /* ignore */ } };
+  es.onerror = () => { if (!polling) S.live.server = false; };
+  es.onmessage = ev => { got = true; try { handle(JSON.parse(ev.data)); } catch (e) { /* ignore */ } };
+  setTimeout(() => { if (!got) { es.close(); startPoll(); } }, 6000);
 }
 
 // ---------------------------------------------- แผงเลือกของขวัญ (กดเลือกส่งเอง)
@@ -4391,12 +4410,7 @@ function startPanel() {
   document.body.classList.add('panel-page');
   ADMIN.el = $id('admin'); ADMIN.open = true;
   fetchLiveConfig();
-  if (typeof EventSource === 'function') {
-    const es = new EventSource('/events');
-    es.onopen = () => { S.live.server = true; };
-    es.onerror = () => { S.live.server = false; };
-    es.onmessage = ev => { try { onLiveMessage(JSON.parse(ev.data)); } catch (e) { /* ignore */ } };
-  }
+  openLiveStream();
   renderAdmin();
   panelPoll();
   setInterval(panelPoll, 500);
