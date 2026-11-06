@@ -7,7 +7,7 @@
 
 // ---------------------------------------------------------------- setup
 // เวอร์ชันของไฟล์เกม — แก้โค้ดเมื่อไหร่ให้เปลี่ยนค่านี้ หน้า /admin จะเตือนถ้าหน้าเกมยังใช้ไฟล์เก่า (ยังไม่ได้กด F5)
-const GAME_BUILD = '2026-11-06.5';
+const GAME_BUILD = '2026-11-06.6';
 const W = 540, H = 960;
 const cv = document.getElementById('game');
 let ctx = cv.getContext('2d');
@@ -1827,7 +1827,13 @@ const RACE_TYPES = {
   classic:  { icon: '🏁', name: 'แข่งปกติ', tip: 'คนสร้าง + บอท 4 คน + ผู้ติดตาม' },
   survival: { icon: '🔥', name: 'Survival', tip: 'ผู้ติดตามแข่งกันเอง · เคาะจอมาก ลุ้นขึ้นนำ 80%' },
   nation:   { icon: '🌏', name: 'ทีมชาติ', tip: 'สุ่มเข้าทีมละ 6 คน · เคาะจอมาก ลุ้นขึ้นนำ 80%' },
+  fair:     { icon: '⚖️', name: 'แฟร์เกม', tip: 'ทุกคนแรงเท่ากัน · ของขวัญทุกราคา = เร่ง 5 วิ เท่ากัน (ไม่วาร์ป ไม่แกล้ง) · บอทไม่โกง' },
+  prank:    { icon: '😈', name: 'กลั่นแกล้ง', tip: 'ของขวัญ = แกล้งคนข้างหน้า (แพงขึ้น แกล้งได้หลายคน) · เคาะจอครบ 15 = ปาเปลือกกล้วย' },
 };
+// ⚖️ แฟร์เกม: ของขวัญ/เคาะจอได้แรงเร่งเท่ากันทุกคน · กดซ้ำได้ทุก FAIR_CD วิ
+const FAIR_BOOST_S = 5, FAIR_CD = 8;
+// 😈 กลั่นแกล้ง: จำนวนคนที่โดนแกล้งตามราคาของขวัญ
+function prankCount(D) { return D >= 299 ? 6 : D >= 99 ? 3 : D >= 20 ? 2 : 1; }
 let RTYPE = (() => { try { const v = localStorage.getItem('mtb.rtype'); return RACE_TYPES[v] ? v : 'survival'; } catch (e) { return 'survival'; } })();
 const LIKE_LEAD = 15, LIKE_LEAD_CHANCE = 0.8, TEAM_SIZE = 6, SPARE_BOTS = 4;
 const NATION_IDS = ['th', 'jp', 'kr', 'us', 'fr', 'br', 'de', 'it', 'ch', 'eg'];
@@ -1847,6 +1853,8 @@ function applyTeams() {
   PLAYER_REF.team = PLAYER_SPRITE.team = RTYPE === 'nation' ? 'th' : null;
   for (const r of S.rivals) {
     if (r.jersey0 === undefined) r.jersey0 = r.jersey;
+    if (r.base0 === undefined) r.base0 = r.base;
+    r.base = RTYPE === 'fair' ? 0.99 : r.base0;   // แฟร์เกม: แรงพื้นฐานเท่ากันทุกคน
     if (RTYPE === 'nation') { if (!r.team) r.team = assignTeam(riderKey(r)); r.jersey = COUNTRIES[r.team].jersey; }
     else { r.team = null; r.jersey = r.jersey0; }
   }
@@ -1885,6 +1893,14 @@ function raceLike(m) {
   r.boostT = Math.max(r.boostT, 0.8);
   if (r.likeHeat < LIKE_LEAD) return;
   r.likeHeat = 0;
+  if (RTYPE === 'fair') { fairBoost(r, `❤️ ${r.name} เคาะจอครบ ${LIKE_LEAD} เร่ง ${FAIR_BOOST_S} วิ`); return; }
+  if (RTYPE === 'prank') {
+    if (Math.random() < LIKE_LEAD_CHANCE) {
+      const ahead = racers().filter(o => o !== r && o.z > r.z).sort((a, b) => a.z - b.z)[0];
+      if (ahead) { knock(ahead, 0.25, 20, r.name); floater(`🍌 ${r.name} เคาะจอรัว ปากล้วยใส่ ${nameOf(ahead)}!`, '#ffe082'); sfx.splat(); return; }
+    }
+    floater(`❤️ ${r.name} เคาะจอ เร่งแรงขึ้น!`, '#f8bbd0'); return;
+  }
   if (Math.random() < LIKE_LEAD_CHANCE) {
     const lead = racers().reduce((a, o) => (o.z > a.z ? o : a));
     if (lead !== r) r.surge = Math.max(r.surge || 0, lead.z - r.z + 4 * U_PER_M);
@@ -2022,6 +2038,30 @@ function knock(t, P, D, by) {
   else { t.stopT = Math.max(t.stopT, stop); t.speed = 0; t.z -= back; t.splat = { emoji: '🍌', t: 2.5 }; later(0.5, () => say(t, pick(TALK.victim), true)); }
   floater(`🍌 ${nameOf(t)} โดนแกล้ง${back > m ? ` ถอย ${(back / m).toFixed(0)} ม.` : ''}!`, '#ffab91');
 }
+// ⚖️ เร่งเท่ากันทุกคน (ไม่วาร์ป) · คนเดิมเร่งซ้ำได้ทุก FAIR_CD วิ
+function fairBoost(o, msg) {
+  const key = o.me ? '_me' : o;
+  const last = o.me ? (S.fairLast || -99) : (o.fairLast || -99);
+  if (S.gt - last < FAIR_CD) { floater(`⏳ ${nameOf(o)} เร่งอยู่แล้ว (รออีก ${Math.ceil(FAIR_CD - (S.gt - last))} วิ)`, '#e0e0e0'); return false; }
+  if (key === '_me') S.fairLast = S.gt; else o.fairLast = S.gt;
+  if (o.me) {
+    addEffect({ key: 'gpower', icon: '⚖️', label: 'เร่ง', dur: FAIR_BOOST_S, maxMult: 1.15, accel: 1.2 });
+    S.pe.effTarget = 100; S.pe.effT = FAIR_BOOST_S; S.pe.tired = false; S.energy = Math.min(100, S.energy + 30);
+  } else {
+    o.boostT = Math.max(o.boostT, FAIR_BOOST_S); o.stam = Math.min(100, o.stam + 30);
+    o.effTarget = 100; o.effT = Math.max(o.effT, FAIR_BOOST_S); o.tired = false;
+  }
+  floater(msg || `⚖️ ${nameOf(o)} เร่ง ${FAIR_BOOST_S} วิ`, '#b9f6ca');
+  return true;
+}
+// 😈 แกล้งคนที่อยู่ข้างหน้าผู้ส่ง (ใกล้สุดก่อน) · เป็นที่ 1 อยู่แล้ว → แกล้งคนที่ตามมา
+function prankAhead(who, n, P, D, user) {
+  const others = racers().filter(o => o !== who);
+  let ts = others.filter(o => o.z > who.z).sort((a, b) => a.z - b.z).slice(0, n);
+  if (!ts.length) ts = others.sort((a, b) => b.z - a.z).slice(0, n);
+  ts.forEach(t => knock(t, P, D, user));
+  return ts;
+}
 function raceGift(m) {
   const D = Math.max(1, (m.diamonds || 0) * (m.count || 1));
   const P = giftPower(D);
@@ -2034,6 +2074,7 @@ function raceGift(m) {
   const em = (DEFAULT_GIFTS_UI.find(g => g.name === m.giftName) || {}).emoji || '🎁';
   S.giftPop = { img: giftImage(m.image), emoji: em, name: m.giftName, user: m.user, count: m.count || 1, t: 0 };
   sfx.pick();
+  if (RTYPE === 'fair' || RTYPE === 'prank') return modeGift(m, D, P, cat, mine, who);
   toast(`🎁 ${m.user} ส่ง ${m.giftName}${m.count > 1 ? ' x' + m.count : ''} (${D}💎) → ${C.icon} ${C.name}`, '#fff9c4');
   if (!mine && m.uniqueId) toast(`💖 ${m.user} กดติดตาม = ได้นักปั่นของตัวเอง!`, '#f8bbd0');
   // ทุกของขวัญ: นักปั่นของผู้ส่งได้พลังพิเศษตามราคา (ช่วยตัวเองได้เต็ม)
@@ -2070,6 +2111,30 @@ function raceGift(m) {
       banner(`🌦️ ${m.user} เปลี่ยนบรรยากาศ!`, `${WEATHERS[id].icon} ${WEATHERS[id].name}${P >= 0.6 ? ' · สลับกลางวัน/กลางคืน' : ''}`); break;
     }
   }
+}
+// ของขวัญในแฟร์เกม / กลั่นแกล้ง
+function modeGift(m, D, P, cat, mine, who) {
+  const gname = `${m.giftName}${m.count > 1 ? ' x' + m.count : ''}`;
+  // เปลี่ยนอากาศ/ฉาก กระทบทุกคนเท่ากัน → ใช้ได้ทั้ง 2 โหมด
+  if (cat === 'mood') { const id = pickOne('weather', S.wCur) || pick(Object.keys(WEATHERS).filter(x => x !== S.wCur)); later(1.2, () => setWeather(id, true)); }
+  if (cat === 'scene') { const id = pickOne('scene', playerScene().sid) || pick(SCENE_IDS.filter(x => x !== playerScene().sid)); later(1.2, () => sceneSoon(id)); }
+  if (RTYPE === 'fair') {
+    toast(`🎁 ${m.user} ส่ง ${gname} → ⚖️ เร่ง ${FAIR_BOOST_S} วิ`, '#fff9c4');
+    if (!mine) { toast(`💖 ${m.user} กดติดตาม = ได้นักปั่นของตัวเอง!`, '#f8bbd0'); return; }   // แฟร์: ไม่ส่งแรงให้คนสร้าง
+    if (fairBoost(mine)) { banner(`⚖️ ${mine.name} เร่ง!`, `${gname} จาก ${m.user} · ทุกของขวัญได้เท่ากัน`); camFocus(mine); sfx.boost(); }
+    return;
+  }
+  // 😈 กลั่นแกล้ง
+  if (!mine && m.uniqueId) toast(`💖 ${m.user} กดติดตาม = ได้นักปั่นของตัวเอง!`, '#f8bbd0');
+  const n = prankCount(D);
+  toast(`🎁 ${m.user} ส่ง ${gname} (${D}💎) → 😈 แกล้ง ${n} คน`, '#fff9c4');
+  const ts = prankAhead(who, n, P, D, m.user);   // เลือกเป้าก่อน แล้วผู้ส่งค่อยได้แรงนิดหน่อย
+  powerUp(who, P, D, 0.2, true);
+  if (ts.length) {
+    banner(`😈 ${m.user} แกล้ง ${ts.slice(0, 3).map(nameOf).join(', ')}${ts.length > 3 ? ` +${ts.length - 3}` : ''}!`, 'หยุดกึก ถอยหลัง!');
+    comic('โดนแกล้ง!!', '#ff8a80'); camFocus(ts[0].me ? PLAYER_REF : ts[0]);
+  }
+  sfx.splat();
 }
 
 // ---- ด่าน 1 ชม. → สรุปผู้เข้าเส้นชัย 1-2-3
@@ -2386,7 +2451,7 @@ function updateDirector(dt) {
   if (S.cheatT <= 0) {
     S.cheatT = (3 + Math.random() * 5) * [1.3, 1, 0.8, 0.6][S.diff];
     const near = S.rivals.filter(r => Math.abs(r.z - pz) < 60 * U_PER_M && r.fallT <= 0 && (MODE !== 'race' || r.bot));   // โหมดแข่ง: บอทเท่านั้นที่โกง
-    if (near.length) doCheat(pick(near));
+    if (near.length && !(MODE === 'race' && RTYPE === 'fair')) doCheat(pick(near));   // แฟร์เกม: ไม่มีใครโกง
   }
   // ดวลกันสูสี
   const close = S.rivals.filter(r => Math.abs(r.z - pz) < 5 * U_PER_M);
@@ -4721,7 +4786,7 @@ function renderAdmin() {
     <tr><td>ของขวัญ</td><td>ผู้ส่งพุ่งนำตามราคา (1.5 ม./💎 สำหรับช่วยตัวเอง) + ผลตามประเภท · แก้ได้ที่ "raceGifts" ใน config.json</td></tr>
     ${(RACE.tiers && RACE.tiers.length ? RACE.tiers : DEFAULT_RACE_TIERS).slice().sort((a, b) => a.min - b.min).map(t => `<tr><td>💎 ${t.min}+</td><td>${RACE_CAT[t.cat] ? RACE_CAT[t.cat].icon + ' ' + RACE_CAT[t.cat].name + ' — ' + RACE_CAT[t.cat].tip : adminEsc(t.cat)}</td></tr>`).join('')}
     <tr><td>รอบ</td><td>${Math.round((RACE.stage ? RACE.stage.durationMs : 1800000) / 60000)} นาที · 40 วิสุดท้ายมีเส้นชัย ใครข้ามก่อนได้อันดับก่อน · สรุป 1-2-3 แล้วล้างอันดับเริ่มรอบใหม่ (บันทึกทุกรอบ) · แก้ "stageMinutes" ใน config.json</td></tr>
-    <tr><td>เคาะจอ</td><td>Survival / ทีมชาติ: ทุกไลก์ได้แรงเพิ่ม · ครบ ${LIKE_LEAD} ครั้ง = ลุ้นขึ้นนำ ${Math.round(LIKE_LEAD_CHANCE * 100)}%</td></tr>
+    <tr><td>เคาะจอ</td><td>Survival / ทีมชาติ: ทุกไลก์ได้แรงเพิ่ม · ครบ ${LIKE_LEAD} ครั้ง = ลุ้นขึ้นนำ ${Math.round(LIKE_LEAD_CHANCE * 100)}% · แฟร์เกม: ครบ ${LIKE_LEAD} = เร่ง ${FAIR_BOOST_S} วิ · กลั่นแกล้ง: ครบ ${LIKE_LEAD} = ปากล้วยใส่คนข้างหน้า</td></tr>
   </table>
   <div class="row">📊 สถิติรอบที่ผ่านมา:</div>
   <div id="admHist" class="stat">กำลังโหลด...</div>` : ''}
@@ -4814,7 +4879,7 @@ function loadHistory() {
   fetch('/race/history?limit=8').then(r => r.json()).then(d => {
     if (!d.ok) { box.textContent = 'ยังไม่ได้เชื่อมฐานข้อมูล (เปิด MySQL ใน XAMPP)'; return; }
     if (!d.stages.length) { box.textContent = 'ยังไม่มีรอบที่แข่งจบ'; return; }
-    const TN = { classic: '🏁', survival: '🔥', nation: '🌏' };
+    const TN = { classic: '🏁', survival: '🔥', nation: '🌏', fair: '⚖️', prank: '😈' };
     box.innerHTML = d.stages.map(s => `<div><b>รอบ ${s.no}</b> ${TN[s.type] || ''} · ${s.riders} คน · ${adminEsc(String(s.at || '').slice(5, 16))}<br><small>${s.top3.map(adminEsc).join(' · ')}</small></div>`).join('<hr style="border:0;border-top:1px solid rgba(255,255,255,.1)">');
   }).catch(() => { box.textContent = 'โหลดสถิติไม่ได้'; });
 }
@@ -5502,18 +5567,30 @@ function giftOverlayCols() {
     const named = Object.entries(RACE.byName || {}).filter(([, c]) => c === t.cat).map(([n]) => n);
     let gs = list.filter(g => named.includes(g.name) || (g.diamonds >= t.min && g.diamonds < next && localCategory(g.name, g.diamonds) === t.cat));
     if (!gs.length) gs = [{ name: '', diamonds: t.min, emoji: '🎁' }];
-    return { head: `${RACE_CAT[t.cat].icon} ${RACE_CAT[t.cat].name}`, gifts: gs.slice(0, 2) };
+    return { head: modeHead(t), gifts: gs.slice(0, 2) };
   });
+}
+// ป้ายของขวัญตามแบบการแข่ง (แฟร์เกม / กลั่นแกล้ง ผลต่างจากปกติ)
+function modeHead(t) {
+  const C = RACE_CAT[t.cat];
+  if (RTYPE === 'fair') return t.cat === 'mood' || t.cat === 'scene' ? `${C.icon} ${C.name}` : '⚖️ เร่งเท่ากัน';
+  if (RTYPE === 'prank') return `😈 แกล้ง ${prankCount(t.min)} คน`;
+  return `${C.icon} ${C.name}`;
+}
+function modeTip(t) {
+  if (RTYPE === 'fair') return t.cat === 'mood' || t.cat === 'scene' ? '+ เร่ง' : `${FAIR_BOOST_S} วิ`;
+  if (RTYPE === 'prank') return t.cat === 'mood' ? '+ อากาศ' : t.cat === 'scene' ? '+ ย้ายฉาก' : 'คนหน้าหยุด';
+  return RACE_CAT[t.cat].short;
 }
 // คอลัมน์ขวา: รูปของขวัญ + ข้อความสั้นๆ บอกผล (แสดงอย่างเดียว กดอะไรไม่ได้) สีจาง
 const GIFT_SIDE_W = 118, GIFT_SIDE_Y = 304;
 function drawGiftSide() {
   const cols = giftOverlayCols();
   if (!cols.length) return;
-  const tips = MODE === 'race' ? (RACE.tiers && RACE.tiers.length ? RACE.tiers : DEFAULT_RACE_TIERS).slice().sort((a, b) => a.min - b.min).filter(t => RACE_CAT[t.cat]).map(t => RACE_CAT[t.cat].short) : [];
+  const tips = MODE === 'race' ? (RACE.tiers && RACE.tiers.length ? RACE.tiers : DEFAULT_RACE_TIERS).slice().sort((a, b) => a.min - b.min).filter(t => RACE_CAT[t.cat]).map(t => modeTip(t)) : [];
   const extra = [];
   if (MODE === 'race') extra.push('💖 ติดตาม = เข้าแข่ง');
-  if (likeMode()) extra.push(`❤️ เคาะจอ = ลุ้นนำ ${Math.round(LIKE_LEAD_CHANCE * 100)}%`);
+  if (likeMode()) extra.push(RTYPE === 'fair' ? `❤️ เคาะจอ ${LIKE_LEAD} = เร่ง ${FAIR_BOOST_S} วิ` : RTYPE === 'prank' ? `❤️ เคาะจอ ${LIKE_LEAD} = ปากล้วย` : `❤️ เคาะจอ = ลุ้นนำ ${Math.round(LIKE_LEAD_CHANCE * 100)}%`);
   const rowH = 40, x0 = W - GIFT_SIDE_W - 6, y0 = GIFT_SIDE_Y;
   const h = 22 + cols.length * rowH + extra.length * 18 + 6;
   ctx.save();
@@ -5961,5 +6038,5 @@ window.__MTB_bench = (frames = 120, flush = true) => {
 };
 window.__MTB_set = (k, v) => { if (k === 'sharp') { SHARP = v; resize(); } if (k === 'pack') { PACK_N = v; initPack(); } };
 window.__MTB_run = sec => { const n = Math.round(sec / 0.05); for (let i = 0; i < n; i++) update(0.05); render(); };
-window.__MTB_race = { RACE, racers, startSpace, CAM, MUSIC, get RTYPE() { return RTYPE; } };
+window.__MTB_race = { RACE, racers, startSpace, CAM, MUSIC, setRaceType, setMode, addFollowerRider, giftOverlayCols, get RTYPE() { return RTYPE; }, get MODE() { return MODE; } };
 })();

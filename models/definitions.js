@@ -49,7 +49,7 @@ function defineModels(seq) {
     distance_m:  { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     diamonds:    { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     streamer:    { type: DataTypes.STRING(64), allowNull: false, defaultValue: '' },
-    race_type:   { type: DataTypes.STRING(12), allowNull: false, defaultValue: '', comment: 'classic / survival / nation' },
+    race_type:   { type: DataTypes.STRING(12), allowNull: false, defaultValue: '', comment: 'classic / survival / nation / fair / prank' },
     team:        { type: DataTypes.STRING(40), allowNull: false, defaultValue: '' },
     finished:    { type: DataTypes.TINYINT(1), allowNull: false, defaultValue: 0 },
     likes:       { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },

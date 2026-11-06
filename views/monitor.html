@@ -186,7 +186,7 @@ function render(d) {
         <span>ขนาดภาพ</span><b>${p.canvas} px (บนจอ ${p.css} · ความคม ${p.sharp}x)</b>
         <span>นักปั่น / สิ่งของ</span><b>${p.riders} คน · ${p.objects} ชิ้น</b>
         <span>หน่วยความจำ JS</span><b>${p.heapMB !== null ? p.heapMB + ' / ' + p.heapLimitMB + ' MB' : '–'}</b>
-        <span>โหมด / กล้อง</span><b>${p.mode === 'race' ? '🏁 ' + ({ classic: 'แข่งปกติ', survival: 'Survival', nation: 'ทีมชาติ' }[p.rtype] || '') : '🎮 จำลอง'} · ${p.space ? '🚀 อวกาศ' : p.cam}</b>
+        <span>โหมด / กล้อง</span><b>${p.mode === 'race' ? '🏁 ' + ({ classic: 'แข่งปกติ', survival: 'Survival', nation: 'ทีมชาติ', fair: 'แฟร์เกม', prank: 'กลั่นแกล้ง' }[p.rtype] || '') : '🎮 จำลอง'} · ${p.space ? '🚀 อวกาศ' : p.cam}</b>
         <span>เสียง</span><b>${p.audio === 'running' ? '🔊 เปิด' : '🔈 ยังไม่เปิด (แตะจอเกม 1 ครั้ง)'}</b>
       </div>${partsHtml(p.parts)}</div>`;
   }).join('') : '<div class="tips warn">ยังไม่พบหน้าเกม — เปิด http://localhost:3000 ใน Chrome</div>';
