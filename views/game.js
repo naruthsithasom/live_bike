@@ -7,7 +7,7 @@
 
 // ---------------------------------------------------------------- setup
 // เวอร์ชันของไฟล์เกม — แก้โค้ดเมื่อไหร่ให้เปลี่ยนค่านี้ หน้า /admin จะเตือนถ้าหน้าเกมยังใช้ไฟล์เก่า (ยังไม่ได้กด F5)
-const GAME_BUILD = '2026-11-06.10';
+const GAME_BUILD = '2026-11-06.11';
 const W = 540, H = 960;
 const cv = document.getElementById('game');
 let ctx = cv.getContext('2d');
@@ -101,7 +101,19 @@ function sampleKeys(keys, h) {
   }
   return keys[0][1];
 }
-function font(size, weight = 600) { ctx.font = `${weight} ${size}px Kanit, "Noto Sans Thai", Tahoma, sans-serif`; }
+// ตัวหนังสือบนจอ: ตัวหนาเกินไปภาพไลฟ์เบลอ/ตัวอักษรไทยติดกัน → ลดความหนาทั้งเกม (800/700→500, 600→400)
+// ขนาดตัวอักษร เล็ก/ปกติ/ใหญ่ เลือกจากแผงผู้ดูแล (localStorage 'mtb.fontsize')
+const FONT_SIZES = { s: { name: 'เล็ก', k: 0.88 }, m: { name: 'ปกติ', k: 1 }, l: { name: 'ใหญ่', k: 1.15 } };
+let FONTSZ = (() => { try { const v = localStorage.getItem('mtb.fontsize'); return FONT_SIZES[v] ? v : 'm'; } catch (e) { return 'm'; } })();
+function fontWeight(w) { w = +w || 600; return w >= 700 ? 500 : w >= 600 ? 400 : Math.min(w, 400); }
+function font(size, weight = 600) { ctx.font = `${fontWeight(weight)} ${Math.round(size * FONT_SIZES[FONTSZ].k * 10) / 10}px Kanit, "Noto Sans Thai", Tahoma, sans-serif`; }
+function setFontSize(v) {
+  if (!FONT_SIZES[v]) return;
+  FONTSZ = v;
+  try { localStorage.setItem('mtb.fontsize', v); } catch (e) { /* ignore */ }
+  if (typeof FIT_CACHE !== 'undefined') FIT_CACHE.clear();
+  if (typeof SPRITE_CACHE !== 'undefined') SPRITE_CACHE.clear();
+}
 function rrPath(x, y, w, h, r) {
   r = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
@@ -386,7 +398,10 @@ function drawFlag(cc, x, y, w, h, alpha = 1) {
 }
 
 // -------------------------------------------------------------- weather
+// ความแรงของสภาพอากาศ (ภาพ/เสียง/ผลต่อการปั่น) — ผู้ใช้ขอลดลง 70% → เหลือ 30%
+const WFX = 0.3;
 const WEATHERS = {
+  clear: { name: 'อากาศปกติ', icon: '🌤️', t: [26, 31], fog: 1.2, maxMult: 1.0, grip: 1.0, waterDrain: 1.0, energyDrain: 1.0, tip: 'อากาศดี ปั่นสบาย' },
   rain: { name: 'ฝนตก', icon: '🌧️', t: [24, 27], fog: 4, maxMult: 0.92, grip: 0.6, waterDrain: 0.8, energyDrain: 1.0, tip: 'ถนนลื่น ระวังโค้ง!' },
   cold: { name: 'หนาว', icon: '🥶', t: [8, 14], fog: 3, maxMult: 0.96, grip: 0.9, waterDrain: 0.6, energyDrain: 1.5, tip: 'หนาว เหนื่อยเร็วขึ้น' },
   snow: { name: 'หิมะตก', icon: '❄️', t: [-4, 1], fog: 6, maxMult: 0.82, grip: 0.45, waterDrain: 0.5, energyDrain: 1.6, tip: 'หิมะ! ช้าลงและลื่นมาก' },
@@ -424,7 +439,7 @@ const OB = {
   roots:   { draw: 'roots', w: 0.5, bad: true, fx: 'hit', keep: 0.6, dmg: 4, label: 'สะดุดรากไม้!' },
   kicker:  { draw: 'kicker', w: 0.98, bad: false, fx: 'air', label: 'ลอยข้ามโนนดิน!' },   // ปากโนนดินในทางวิบาก
 };
-const WEATHER_OBST = { rain: ['puddle', 'mud', 'stream'], snow: ['ice', 'ice'], cold: ['ice'], dry: ['sand'], hot: [] };
+const WEATHER_OBST = { clear: [], rain: ['puddle', 'mud', 'stream'], snow: ['ice', 'ice'], cold: ['ice'], dry: ['sand'], hot: [] };
 
 // ---------------------------------------------------------------- items
 const ITEM_W = { gift: 3, water: 3, food: 3, med: 1.5, tent: 0.7 };
@@ -526,7 +541,7 @@ function sceneForSlot(slot) {
 }
 function weatherForSlot(slot, sceneId) {
   const r = mulberry32(slot * 104729 + 3)();
-  return pickWeighted(SCENES[sceneId].ww, r);
+  return pickWeighted(Object.assign({ clear: 3 }, SCENES[sceneId].ww), r);   // 🌤️ อากาศปกติ สุ่มได้ทุกฉาก
 }
 function diffForSlot(slot) {
   const r = mulberry32(slot * 15485863 + 11)();
@@ -1119,8 +1134,71 @@ function babble(n, pitch) {
   for (let i = 0; i < Math.min(12, Math.ceil(n / 2)); i++)
     note(220 * pitch * (0.8 + Math.random() * 0.6), t0 + i * 0.075, 0.07, 'square', 0.05, 1800, sfxOut());
 }
+// ---------------------------------------------------------------- 🎙️ ผู้ประกาศ + พากย์การแข่ง
+// อ่านออกเสียง (TTS ภาษาไทยของเครื่อง) เรียงคิวทีละประโยค ไม่พูดทับกัน · ประกาศเหตุการณ์ไลฟ์ (ติดตาม/ของขวัญ/แชร์/คอมเมนต์ ฯลฯ)
+// และพากย์การแข่งอัตโนมัติ · ตั้งค่าจากแผงผู้ดูแล จำไว้ใน localStorage 'mtb.ann'
+const ANN = (() => {
+  const d = { on: true, comm: true, chat: true, gender: 'f' };
+  try { const v = JSON.parse(localStorage.getItem('mtb.ann') || '{}'); for (const k in d) if (typeof v[k] === typeof d[k]) d[k] = v[k]; } catch (e) { /* ignore */ }
+  return d;
+})();
+function saveAnn() { try { localStorage.setItem('mtb.ann', JSON.stringify(ANN)); } catch (e) { /* ignore */ } }
+const ANNQ = [], ANN_LAST = {};
+let annBusy = false, annBusyUntil = 0;
+// เว้นระยะขั้นต่ำต่อชนิด (วินาที) กันพูดรัว · ลำดับความสำคัญ: สูง = พูดก่อน และไม่ถูกตัดทิ้งตอนคิวยาว
+const ANN_GAP = { join: 12, chat: 8, like: 25, rejoin: 10, viewers: 30, lead: 10, comm: 0, tip: 0 };
+const ANN_PRIO = { follow: 3, gift: 3, sub: 3, superfan: 3, chest: 3, win: 3, share: 2, question: 2, pk: 2, race: 2, lead: 2, rejoin: 1, viewers: 1, like: 1, chat: 1, comm: 1, tip: 0, join: 0 };
+const FEMALE_RE = /premwadee|achara|kanya|pattara|female|ผู้หญิง|หญิง/i, MALE_RE = /niwat|\bmale\b|ผู้ชาย|ชาย/i;
+function thaiVoices() { try { return speechSynthesis.getVoices().filter(v => /^th/i.test(v.lang)); } catch (e) { return []; } }
+// เลือกเสียงตามเพศ: มีเสียงตรงเพศ → ใช้เลย · มีเสียงไทยเสียงเดียว → ปรับระดับเสียงแทน (หญิงสูง / ชายต่ำ)
+function annVoice() {
+  const vs = thaiVoices();
+  if (!vs.length) return null;
+  const want = ANN.gender === 'm' ? vs.find(v => MALE_RE.test(v.name) && !/female/i.test(v.name)) : vs.find(v => FEMALE_RE.test(v.name));
+  return { v: want || vs[0], exact: !!want };
+}
+function annPitch(exact) { return exact ? 1 : ANN.gender === 'm' ? 0.6 : 1.15; }
+function pol(s) { return s.replace(/\{k\}/g, ANN.gender === 'm' ? 'ครับ' : 'ค่ะ'); }
+// ชื่อผู้ชมสำหรับอ่านออกเสียง: ตัดอีโมจิ/ตัวอักษรแปลก · อ่านไม่ได้ → "คุณผู้ชม"
+function sayName(n) { const c = String(n || '').replace(/^@/, '').replace(/[^฀-๿a-zA-Z0-9 ._]/g, '').replace(/[._]+/g, ' ').trim().slice(0, 24); return c || 'คุณผู้ชม'; }
+function speechText(s) { return String(s).replace(/https?:\/\/\S+/g, '').replace(/[^฀-๿a-zA-Z0-9 !?.,%]/g, ' ').replace(/\s+/g, ' ').trim(); }
+function announce(kind, text) {
+  if (!text || typeof SpeechSynthesisUtterance !== 'function') return;
+  const isComm = kind === 'comm' || kind === 'race' || kind === 'lead' || kind === 'win' || kind === 'tip';
+  if (isComm ? !ANN.comm : !ANN.on) return;
+  if (kind === 'chat' && !ANN.chat) return;
+  const gap = ANN_GAP[kind] || 0, p = ANN_PRIO[kind] ?? 1;
+  if (gap && S.t - (ANN_LAST[kind] ?? -99) < gap) return;
+  if ((p <= 1 && ANNQ.length >= 2) || (p < 3 && ANNQ.length >= 5)) return;   // คิวยาว: ทิ้งเรื่องเล็ก
+  ANN_LAST[kind] = S.t;
+  const it = { text: speechText(pol(text)), p, at: performance.now() };
+  if (!it.text) return;
+  const i = ANNQ.findIndex(q => q.p < p);
+  if (i < 0) ANNQ.push(it); else ANNQ.splice(i, 0, it);
+  annNext();
+}
+function annNext() {
+  if (annBusy && performance.now() < annBusyUntil) return;
+  annBusy = false;
+  while (ANNQ.length && performance.now() - ANNQ[0].at > 20000) ANNQ.shift();   // ค้างนานเกิน → ข้าม
+  if (!ANNQ.length) return;
+  const sel = annVoice();
+  if (!sel) { ANNQ.length = 0; return; }
+  const it = ANNQ.shift();
+  try {   // เสียงพูดพัง ห้ามทำให้การรับของขวัญ/ผู้ติดตามพังตาม
+    const u = new SpeechSynthesisUtterance(it.text);
+    u.voice = sel.v; u.lang = sel.v.lang; u.pitch = annPitch(sel.exact); u.rate = 1.05; u.volume = 1;
+    annBusy = true; annBusyUntil = performance.now() + 4000 + it.text.length * 160;   // กันค้าง ถ้า onend ไม่มา
+    const done = () => { if (!annBusy) return; annBusy = false; setTimeout(annNext, 300); };
+    u.onend = done; u.onerror = done;
+    if (speechSynthesis.speaking) speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  } catch (e) { annBusy = false; }
+}
+setInterval(() => { if (!PANEL) annNext(); }, 1000);
 function speak(text, pitch, prio) {
   if (!S.voiceOn || !AC) return;
+  if (annBusy || ANNQ.length) return;   // ผู้ประกาศพูดอยู่ → นักปั่นไม่พูดแทรก
   const clean = text.replace(/[^฀-๿a-zA-Z0-9 !?.,]/g, '').trim();
   if (!clean) return;
   if (THAI_VOICE && typeof SpeechSynthesisUtterance === 'function') {
@@ -1406,6 +1484,19 @@ function onLiveMessage(m) {
   if (m.type === 'social') {
     if (m.ev === 'connected' || m.ev === 'end') banner(m.text, m.ev === 'end' ? 'ไลฟ์จบ' : 'พร้อมรับของขวัญ ไลก์ และผู้ติดตามแล้ว');
     else toast(m.text, m.ev === 'lost' ? '#ffccbc' : '#f8bbd0');
+    const nm = sayName(m.nickname);
+    const say = {
+      connected: 'เชื่อมต่อไลฟ์สำเร็จ พร้อมแข่งแล้ว{k}',
+      end: 'ไลฟ์จบแล้ว ขอบคุณทุกคนที่มาเชียร์{k}',
+      share: `ขอบคุณ ${nm} ที่แชร์ไลฟ์{k}`,
+      sub: `ขอบคุณ ${nm} ที่สมัครสมาชิก{k}`,
+      superfan: `ยินดีต้อนรับซูเปอร์แฟน ${nm}{k}`,
+      chest: `${nm} แจกกล่องสมบัติ รีบกดรับกันเลย{k}`,
+      question: `${nm} มีคำถามเข้ามา{k}`,
+      pk: 'เริ่มพีเคแล้ว ช่วยกันส่งพลังเลย{k}',
+      viewers: `ตอนนี้มีคนดูทะลุ ${m.count} คนแล้ว ขอบคุณทุกคน{k}`,
+    }[m.ev];
+    if (say) announce(m.ev === 'connected' || m.ev === 'end' ? 'race' : m.ev, say);
     return;
   }
   // ❤️ เคาะจอรายคน (โหมด survival / ทีมชาติ)
@@ -1413,12 +1504,25 @@ function onLiveMessage(m) {
   // 👋 คนเข้าห้อง: แสดงจางๆ ไม่เกิน 1 คน / 4 วิ (ผู้ติดตามเข้าร่วมแข่งผ่านข้อความ follow อยู่แล้ว)
   if (m.type === 'join') {
     if (S.t - (S.lastJoinToast || -99) > 4) { S.lastJoinToast = S.t; toast(`👋 ${m.nickname} เข้ามาในไลฟ์`, 'rgba(255,255,255,0.75)'); }
+    announce('join', `ยินดีต้อนรับ ${sayName(m.nickname)}{k}`);
     return;
   }
-  // 💬 แชท: ไม่แสดงข้อความบทสนทนาบนจอแล้ว (ผู้ใช้ขอให้ตัดออก — ผู้ชมเห็นแชทใน TikTok อยู่แล้ว)
-  if (m.type === 'chat') return;
-  // โหมดแข่งผู้ติดตาม
-  if (m.type === 'follow') { noteFollow(m); if (MODE === 'race') addFollowerRider(m, true); return; }
+  // 💬 แชท: ไม่แสดงข้อความบนจอ (ผู้ชมเห็นใน TikTok อยู่แล้ว) · ผู้ประกาศอ่านออกเสียงให้ (เว้นระยะ ไม่อ่านลิงก์)
+  if (m.type === 'chat') {
+    const t = speechText(m.text || '').slice(0, 70);
+    if (t && !/^\d{1,2}$/.test(t)) announce('chat', `${sayName(m.nickname)} บอกว่า ${t}`);
+    return;
+  }
+  // โหมดแข่งผู้ติดตาม: กดติดตาม = ได้นักปั่นชื่อของคนนั้นทันที + ประกาศชื่อ
+  if (m.type === 'follow') {
+    noteFollow(m);
+    if (MODE !== 'race' && !m.already) toast(`💖 ${m.nickname} กดติดตามแล้ว!`, '#f8bbd0');
+    if (MODE === 'race') addFollowerRider(m, true);
+    const nm = sayName(m.nickname);
+    if (m.already) announce('rejoin', `${nm} เข้าร่วมแข่งแล้ว{k}`);
+    else announce('follow', MODE === 'race' ? `ขอบคุณ ${nm} ที่กดติดตาม{k} ${nm} ได้เข้าร่วมแข่งแล้ว` : `ขอบคุณ ${nm} ที่กดติดตาม{k}`);
+    return;
+  }
   if (m.type === 'roster') { if (MODE === 'race') { S.rivals = S.rivals.filter(r => !r.follower); topUpBots(); toast('🧹 ล้างนักปั่นผู้ติดตามแล้ว', '#e0e0e0'); } return; }
   if (m.type === 'stage') {
     // อีกจอจบด่านไปก่อน → จอนี้แสดงผลด้วย (ไม่ส่งซ้ำ)
@@ -1426,8 +1530,14 @@ function onLiveMessage(m) {
     setStage(m.stage);
     return;
   }
-  if (m.type === 'gift' && MODE === 'race' && m.kind !== 'like') { raceGift(m); return; }
+  if (m.type === 'gift' && m.kind !== 'like' && m.user !== 'แอดมิน') {
+    const n = m.count > 1 ? ` ${m.count} ชิ้น` : '';
+    announce('gift', `ขอบคุณ ${sayName(m.user)} สำหรับ ${m.giftName}${n}{k}`);
+  }
+  if (m.type === 'gift' && MODE === 'race') { if (m.kind === 'like') raceLikeTotal(m); else raceGift(m); return; }
+  if (m.type === 'gift' && m.kind === 'like') announce('like', 'ขอบคุณทุกไลก์{k}');
   if (m.type === 'team') {
+    if (MODE === 'race') return;   // เชียร์ตัวละครด้วยเลข 1-5 ใช้กับโหมดจำลองเท่านั้น
     S.teams[m.char] = (S.teams[m.char] || 0) + 1;
     toast(`📣 ${m.user} เชียร์ ${CHAR_NAMES[m.char] || '?'}!`, '#e1f5fe');
     return;
@@ -1578,7 +1688,8 @@ function effTotals() {
 
 // ---------------------------------------------------------- weather
 function wI(id) { return (S.wCur === id ? S.wT : 0) + (S.wPrev === id ? 1 - S.wT : 0); }
-function wp(key) { return lerp(WEATHERS[S.wPrev][key], WEATHERS[S.wCur][key], S.wT); }
+// ค่าผลของอากาศ (ความเร็ว/การเกาะถนน/ความเหนื่อย) ลดลงตาม WFX ให้ใกล้ปกติ (1.0)
+function wp(key) { const v = lerp(WEATHERS[S.wPrev][key], WEATHERS[S.wCur][key], S.wT); return key === 'fog' ? lerp(1.2, v, WFX) : 1 + (v - 1) * WFX; }
 function setWeather(id, quiet) {
   if (id === S.wCur) return;
   S.wPrev = S.wCur; S.wCur = id; S.wT = 0;
@@ -1680,10 +1791,10 @@ function updateParticles(dt) {
   }
   for (const c of S.clouds) c.x += dt * 4 * c.s;
   // ลมหายใจตอนหนาว
-  const coldI = wI('cold') + wI('snow');
+  const coldI = (wI('cold') + wI('snow')) * WFX;
   if (coldI > 0.3 && S.started && Math.random() < dt * 1.2) S.breath.push({ t: 0, x: W / 2 + (Math.random() - 0.5) * 30 });
   S.breath = S.breath.filter(b => (b.t += dt) < 1.4);
-  if (wI('rain') > 0.6 && Math.random() < dt * 0.04) S.lightning = 1;
+  if (wI('rain') > 0.6 && Math.random() < dt * 0.04 * WFX) S.lightning = WFX + 0.2;
   S.lightning = Math.max(0, S.lightning - dt * 2.5);
 }
 
@@ -1986,6 +2097,14 @@ function raceLike(m) {
     floater(`❤️ ${r.name} เคาะจอรัวๆ ขึ้นนำ!`, '#f8bbd0'); camFocus(r); sfx.boost();
   } else floater(`❤️ ${r.name} เคาะจอ เร่งแรงขึ้น!`, '#f8bbd0');
 }
+// ❤️ ไลก์รวมครบ (likesPerJump) ในโหมดแข่ง: ทุกคนได้แรงเชียร์เท่ากัน (ไม่เปลี่ยนอันดับ ไม่ทำท่าของผู้จัด)
+function raceLikeTotal(m) {
+  if (RACE.podium || S.countdown > 0) return;
+  for (const r of S.rivals) { r.boostT = Math.max(r.boostT, 1.5); r.stam = Math.min(100, r.stam + 10); }
+  if (!hostOut()) S.energy = Math.min(100, S.energy + 10);
+  floater(`❤️ ไลก์ครบ ${String(m.giftName || '').replace(/\D/g, '') || ''} ทุกคนได้แรงเชียร์!`, '#f8bbd0');
+  announce('like', `ขอบคุณทุกไลก์{k} ทุกคนได้แรงเชียร์`);
+}
 // ไหลแซงขึ้นนำแบบนุ่มๆ (ไม่กระโดดตำแหน่ง)
 function surgeTick(dt) {
   for (const r of S.rivals) {
@@ -2004,6 +2123,7 @@ function finishTick() {
     const lead = all.reduce((a, o) => (o.z > a.z ? o : a));
     RACE.finishZ = lead.z + Math.max(riderSpeed(lead), MAX_SPEED * 0.6) * 0.85 * left / 1000;
     banner('🏁 เส้นชัยอยู่ข้างหน้า!', 'ใครข้ามเส้นก่อน ได้อันดับก่อน');
+    announce('race', 'เส้นชัยอยู่ข้างหน้าแล้ว ใครจะเข้าเส้นชัยคนแรก{k}');
   }
   if (!RACE.finishZ) return;
   for (const o of all) {
@@ -2011,7 +2131,7 @@ function finishTick() {
     if (RACE.finished.has(k) || o.z < RACE.finishZ) continue;
     RACE.finished.set(k, RACE.finished.size + 1);
     const n = RACE.finished.size;
-    if (n === 1) { banner(`🥇 ${nameOf(o)} เข้าเส้นชัยคนแรก!`, 'ชนะรอบนี้!'); confetti(80); sfx.cheer(); camFocus(o.me ? PLAYER_REF : o); }
+    if (n === 1) { banner(`🥇 ${nameOf(o)} เข้าเส้นชัยคนแรก!`, 'ชนะรอบนี้!'); confetti(80); sfx.cheer(); camFocus(o.me ? PLAYER_REF : o); announce('win', `${sayName(nameOf(o))} เข้าเส้นชัยเป็นคนแรก ชนะรอบนี้{k}`); }
     else if (n <= 3) floater(`${n === 2 ? '🥈' : '🥉'} ${nameOf(o)} เข้าเส้นชัยอันดับ ${n}`, '#fff59d');
   }
   if (RACE.finished.size >= all.length && !RACE.finishing) finishStage();
@@ -2235,6 +2355,7 @@ function finishStage(noPost) {
   const no = RACE.stage ? RACE.stage.no : 1;
   RACE.podium = { list, t: 0, no, rtype: RTYPE, teams: RTYPE === 'nation' ? teamStandings() : null };
   banner(`🏁 จบรอบ ${no}!`, 'ประกาศผลผู้เข้าเส้นชัย');
+  if (list[0]) announce('win', `จบการแข่งขันรอบที่ ${no}{k} ผู้ชนะคือ ${sayName(list[0].name)}${list[1] ? ` อันดับสอง ${sayName(list[1].name)}` : ''}${list[2] ? ` อันดับสาม ${sayName(list[2].name)}` : ''}`);
   confetti(120); sfx.cheer();
   if (noPost) return;
   if (S.live.server && typeof fetch === 'function') {
@@ -2277,13 +2398,48 @@ function endPodium() {
   S.countdown = 3.4;
   const mins = Math.round((RACE.stage ? RACE.stage.durationMs : 1800000) / 60000);
   banner(`🏁 รอบ ${RACE.stage ? RACE.stage.no : ''} เริ่มแล้ว!`, `แข่ง ${mins >= 60 ? (mins / 60) + ' ชม.' : mins + ' นาที'} · ใครเข้าเส้นชัยก่อนชนะ`);
+  announce('race', `เริ่มการแข่งขันรอบที่ ${RACE.stage ? RACE.stage.no : ''} แล้ว{k} ใครเข้าเส้นชัยก่อนชนะ`);
 }
 // คืน true = หยุดอัปเดตเกมเฟรมนี้ (กำลังแสดงหน้าสรุปผล)
 function raceTick(dt) {
   if (RACE.podium) { if ((RACE.podium.t += dt) > PODIUM_SEC) endPodium(); return true; }
   if (S.countdown <= 0 && !RACE.finishing && RACE.stage && stageLeftMs() <= 0) { finishStage(); return true; }
-  if (S.countdown <= 0 && !RACE.finishing) { surgeTick(dt); finishTick(); }
+  if (S.countdown <= 0 && !RACE.finishing) { surgeTick(dt); finishTick(); commTick(dt); }
   return false;
+}
+// 🏁 พากย์การแข่งอัตโนมัติ: ทุก ~25-40 วิ เล่าสถานการณ์ (ผู้นำ ระยะห่าง เวลาที่เหลือ ชวนกดติดตาม/เคาะจอ)
+const COMM = { next: 12, warned: {} };
+function commTick(dt) {
+  if (!ANN.comm || SP.on) return;
+  const left = stageLeftMs();
+  // เวลาที่เหลือ: แจ้งครั้งเดียวต่อรอบ
+  const no = RACE.stage ? RACE.stage.no : 0;
+  for (const mn of [10, 5, 1]) {
+    const k = no + ':' + mn;
+    if (left !== null && left < mn * 60000 && left > (mn * 60000 - 20000) && !COMM.warned[k]) { COMM.warned[k] = true; announce('race', mn === 1 ? 'เหลืออีกหนึ่งนาทีสุดท้าย เร่งเครื่องกันเลย{k}' : `เหลือเวลาอีก ${mn} นาที{k}`); }
+  }
+  if ((COMM.next -= dt) > 0) return;
+  COMM.next = 25 + Math.random() * 15;
+  const all = racers().slice().sort((a, b) => b.z - a.z);
+  if (!all.length) return;
+  const lines = [];
+  const a = all[0], b = all[1], c = all[2];
+  if (RTYPE === 'nation') {
+    const ts = teamStandings();
+    if (ts[0] && COUNTRIES[ts[0].id]) lines.push(`ทีมชาติ${COUNTRIES[ts[0].id].name} นำอยู่${ts[1] && COUNTRIES[ts[1].id] ? ` ตามด้วยทีมชาติ${COUNTRIES[ts[1].id].name}` : ''}{k}`);
+  }
+  if (b) {
+    const gap = Math.round((a.z - b.z) / U_PER_M);
+    lines.push(gap < 5 ? `${sayName(nameOf(a))} กับ ${sayName(nameOf(b))} สูสีกันมาก ห่างกันไม่ถึงห้าเมตร{k}` : `ตอนนี้ ${sayName(nameOf(a))} นำอยู่ ห่าง ${sayName(nameOf(b))} ${gap} เมตร{k}`);
+  } else lines.push(`${sayName(nameOf(a))} นำอยู่{k}`);
+  if (c) lines.push(`อันดับหนึ่ง ${sayName(nameOf(a))} อันดับสอง ${sayName(nameOf(b))} อันดับสาม ${sayName(nameOf(c))}{k}`);
+  if (left !== null && left > 60000) lines.push(`รอบนี้เหลือเวลาอีก ${Math.ceil(left / 60000)} นาที{k}`);
+  lines.push(`ตอนนี้มีนักปั่นในสนาม ${all.length} คน{k}`);
+  lines.push('กดติดตาม เพื่อเข้าร่วมแข่งได้ทันที{k}');
+  if (likeMode()) lines.push(RTYPE === 'prank' ? 'เคาะจอรัวๆ เพื่อปาเปลือกกล้วยใส่คนข้างหน้า{k}' : 'เคาะจอรัวๆ ช่วยให้นักปั่นของคุณขึ้นนำ{k}');
+  lines.push('ส่งของขวัญ ช่วยนักปั่นของคุณพุ่งขึ้นนำ{k}');
+  // เน้นเรื่องการแข่ง 2 ใน 3 ครั้ง ที่เหลือเป็นคำชวน
+  announce(Math.random() < 0.67 ? 'comm' : 'tip', Math.random() < 0.67 ? pick(lines.slice(0, Math.max(1, lines.length - 3))) : pick(lines.slice(-3)));
 }
 // ---- 🧲 รวมกลุ่ม: ผู้นำชะลอ ผู้ตามท้ายเร่งมาจับกลุ่ม แล้วแข่งกันต่อ
 function regroupStart() {
@@ -2523,6 +2679,7 @@ function updateRank() {
   if (S.leader && leadKey !== S.leader) {
     if (order[0].me) { banner('👑 คุณขึ้นนำ!', 'รักษาตำแหน่งไว้!'); comic('ที่ 1!!', '#ffd54f'); confetti(70); sfx.cheer(); }
     else { banner(`👑 ${order[0].name} ขึ้นนำ!`, 'ไล่ตามให้ทัน!'); say(order[0], pick(TALK.lead), true); }
+    if (MODE === 'race') announce('lead', `${sayName(nameOf(order[0]))} ขึ้นนำแล้ว{k}`);
   }
   S.leader = leadKey;
 }
@@ -2917,8 +3074,8 @@ function update(dt) {
   }
 
   if (AC && rainGain) {
-    rainGain.gain.value = (wI('rain') * 0.05) * (S.paused ? 0 : 1);
-    windGain.gain.value = Math.min(0.12, (S.speed / MAX_SPEED) * 0.07 + wI('snow') * 0.03) * (S.paused || !S.started ? 0 : 1);
+    rainGain.gain.value = (wI('rain') * 0.05 * WFX) * (S.paused ? 0 : 1);
+    windGain.gain.value = Math.min(0.12, (S.speed / MAX_SPEED) * 0.07 + wI('snow') * 0.03 * WFX) * (S.paused || !S.started ? 0 : 1);
   }
   PLAYER_SPRITE.name = playerName(); PLAYER_SPRITE.avatar = MODE === 'race' ? (RACE.owner.avatar || '') : '';
   if (!S.started || S.paused) return;
@@ -2963,7 +3120,7 @@ function computeEnv() {
   const th = thaiTime(), h = th.hf;
   let top = sampleKeys(SKY_TOP, h), bot = sampleKeys(SKY_BOT, h);
   const dark = sampleKeys(DARK, h), warm = sampleKeys(WARM, h);
-  const rain = wI('rain'), snow = wI('snow'), cold = wI('cold'), hot = wI('hot'), dry = wI('dry');
+  const rain = wI('rain') * WFX, snow = wI('snow') * WFX, cold = wI('cold') * WFX, hot = wI('hot') * WFX, dry = wI('dry') * WFX;
   const overcast = clamp(rain * 0.85 + snow * 0.8 + cold * 0.35, 0, 1);
   const grey = mix([115, 120, 130], [28, 30, 40], dark / 0.62);
   top = mix(top, grey, overcast * 0.75);
@@ -3760,6 +3917,7 @@ function startSpace(by) {
   for (let i = 0; i < 260; i++) SP.stars.push(newStar(true));
   S.trick = null; S.fx.crash = 0;
   banner('🚀 ทะยานสู่อวกาศ!', by ? `ของขวัญจาก ${by}` : 'จักรยานกลายร่างเป็นจรวด!');
+  announce('race', 'ทุกคนกลายร่างเป็นจรวด ทะยานสู่อวกาศ{k}');
   comic('สู่อวกาศ!!', '#80d8ff');
   sfx.boost(); confetti(40);
 }
@@ -3768,6 +3926,7 @@ function endSpace() {
   addSceneChange('mountain', playerSegIdx() - 30);
   S.lastScene = 'mountain';
   banner('🌍 กลับสู่โลก!', 'ลงจอดบนภูเขา ปั่นต่อเลย!');
+  announce('race', 'กลับสู่โลกแล้ว ปั่นต่อกันเลย{k}');
   S.speed = MAX_SPEED * 0.9;
   CAM.snap = true; CAM.flash = 1;
   sfx.cheer();
@@ -4055,25 +4214,9 @@ function drawSpace(env) {
       else { const p = spProj(o.x, o.y, o.z), s = o.r * p.s * 2.4; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(o.rot); drawEmo('🪨', 0, s / 2, s); ctx.restore(); }
     }
   }
-  // คู่แข่งในอวกาศ
-  const pz = S.position + PLAYER_Z;
-  const vis = S.rivals.map(r => ({ r, gap: r.z - pz })).filter(e => e.gap > 50 && e.gap < 70 * CAM_U).sort((a, b) => b.gap - a.gap);
-  for (const { r, gap } of vis) {
-    const z = 260 + gap / CAM_U * 28;
-    const p = spProj(r.x * 650 + Math.sin(S.t * 0.7 + r.idx) * 160, ((r.idx % 5) - 2) * 130 + Math.cos(S.t * 0.9 + r.idx) * 80, z);
-    const k = p.s * 0.55;
-    drawRocketRider(p.x, p.y + 300 * k, k, r, id === 'descent');
-    if (k * 700 > 40) { font(13, 600); const tw = ctx.measureText(r.name).width + 12; rr(p.x - tw / 2, p.y - 520 * k - 22, tw, 20, 6, 'rgba(0,0,0,0.5)'); textC(r.name, p.x, p.y - 520 * k - 12, '#fff', 13, 600); }
-  }
   ctx.restore();
-  // จรวดของผู้เล่น (มุมหลัง)
-  const shake = (Math.random() - 0.5) * S.shake * 14;
-  const px = W / 2 + (SP.rx - SP.rx * 0.85) * SPF / 250 + shake, py = H * 0.86 + (SP.ry - SP.ry * 0.85) * SPF / 250;
-  ctx.save();
-  ctx.translate(px, py); ctx.rotate(clamp(SP.vx / 3000, -0.3, 0.3)); ctx.translate(-px, -py);
-  syncPlayerSprite(); PLAYER_SPRITE.jumpT = 0; PLAYER_SPRITE.fallT = 0; PLAYER_SPRITE.wheelieT = 0; PLAYER_SPRITE.driftT = 0;
-  drawRocketRider(px, py, 0.42, PLAYER_SPRITE, id === 'descent');
-  ctx.restore();
+  // ทั้งกลุ่มร่วงลงพร้อมร่มชูชีพ (ไม่โฟกัสคนเดียว)
+  drawRocketGroup(H * 0.9, id === 'descent');
   if (SP.flash > 0) { ctx.fillStyle = `rgba(255,255,255,${SP.flash * 0.8})`; ctx.fillRect(0, 0, W, H); }
   if (id === 'blackhole' && u > 0.75) { ctx.fillStyle = `rgba(0,0,0,${(u - 0.75) * 4})`; ctx.fillRect(0, 0, W, H); }
 }
@@ -4087,9 +4230,37 @@ function drawLaunchFX() {
     ell(x, y, s, s * 0.4, '#ffffff');
     ctx.globalAlpha = 1;
   }
-  syncPlayerSprite(); PLAYER_SPRITE.jumpT = 0;
-  drawRocketRider(W / 2, H * 0.92 - u * 120, 0.42, PLAYER_SPRITE, false);
+  drawRocketGroup(H * 0.94 - u * 140, false);
   if (u > 0.8) { ctx.fillStyle = `rgba(255,255,255,${(u - 0.8) * 5})`; ctx.fillRect(0, 0, W, H); }
+}
+// 🚀 ทะยานขึ้น / ร่วงลง: แสดงทั้งกลุ่มเป็นขบวน (มุมหลัง) ไม่โฟกัสคนเดียว · ผู้นำอยู่หน้าสุด (ไกล/สูง) คนท้ายอยู่ใกล้กล้อง
+function drawRocketGroup(baseY, chute) {
+  const all = racers().map(o => (o.me ? (syncPlayerSprite(), Object.assign(PLAYER_SPRITE, { team: PLAYER_REF.team, jumpT: 0, fallT: 0, wheelieT: 0, driftT: 0 })) : o))
+    .sort((a, b) => b.z - a.z);
+  const n = all.length;
+  if (!n) return;
+  const perRow = n <= 3 ? n : n <= 8 ? 3 : n <= 15 ? 4 : 5, rows = Math.ceil(n / perRow);
+  const k0 = clamp(0.36 - n * 0.006, 0.2, 0.34);
+  const spanY = Math.min(H * 0.5, rows * 110);
+  for (let row = 0; row < rows; row++) {   // แถวหน้า (ผู้นำ) วาดก่อน เพราะอยู่ไกลกว่า
+    const list = all.slice(row * perRow, row * perRow + perRow);
+    const depth = rows > 1 ? row / (rows - 1) : 1;        // 0 = ไกลสุด (ผู้นำ), 1 = ใกล้กล้อง
+    const k = k0 * (0.55 + 0.45 * depth);
+    const y = baseY - (1 - depth) * spanY;
+    const spread = Math.min(W * 0.78, list.length * 520 * k) / Math.max(1, list.length);
+    list.forEach((o, i) => {
+      const x = W / 2 - GIFT_SIDE_W * 0.2 + (i - (list.length - 1) / 2) * spread + Math.sin(S.t * 1.4 + i + row) * 8;
+      const yy = y + Math.cos(S.t * 1.2 + i * 1.7 + row) * 6;
+      drawRocketRider(x, yy, k, o, chute);
+      const rank = row * perRow + i;
+      if (rank < 3) {
+        const nm = (rank === 0 ? '👑 ' : '') + nameOf(o), t = nm.length > 12 ? nm.slice(0, 11) + '…' : nm;
+        font(11, 700); const tw = ctx.measureText(t).width + 10;
+        rr(x - tw / 2, yy - 560 * k - 18, tw, 17, 6, o.follower ? 'rgba(233,30,99,0.55)' : 'rgba(0,0,0,0.5)');
+        textC(t, x, yy - 560 * k - 9, '#fff', 11, 700);
+      }
+    });
+  }
 }
 
 // ----------------------------------------------------------- cameras
@@ -4535,8 +4706,8 @@ function toggleAdmin() {
 // ---- หน้า /admin: ส่งคำสั่ง / รับสถานะจากหน้าเกมผ่านเซิร์ฟเวอร์
 const REMOTE = { on: new Set(), age: -1, mode: null, pend: new Map() };
 // กดปุ่มในหน้า /admin แล้วติดไฟทันที (เดาผลไว้ก่อน) ไม่ต้องรอหน้าเกมตอบกลับ — หน้าเกมยืนยันแล้วค่อยใช้ค่าจริง
-const PRED_SINGLE = new Set(['mode', 'track', 'cohesion', 'sharp', 'rtype', 'camstyle', 'pack', 'action', 'tmode', 'host']);
-const PRED_TOGGLE = new Set(['space', 'pause', 'music', 'voice', 'flist', 'gifts', 'regroup']);
+const PRED_SINGLE = new Set(['mode', 'track', 'cohesion', 'sharp', 'rtype', 'camstyle', 'pack', 'action', 'tmode', 'host', 'vgender', 'fontsz']);
+const PRED_TOGGLE = new Set(['space', 'pause', 'music', 'voice', 'flist', 'gifts', 'regroup', 'ann', 'annchat', 'comm']);
 const PRED_SKIP = new Set(['sfxvol', 'envvol', 'bgtone', 'rspd', 'close']);
 function predictPanel(kind, val) {
   if (!ADMIN.el || PRED_SKIP.has(kind)) return;
@@ -4806,6 +4977,7 @@ function adminAct(kind, val, opt) {
       toast(`🔍 ความคมภาพ: ${SHARP_LEVELS[val] || val} (${val}x)`, '#e1f5fe');
       break;
     case 'fitwin': fitWindow(false); break;
+    case 'fontsz': setFontSize(val); toast(`🔤 ตัวหนังสือ: ${FONT_SIZES[val] ? FONT_SIZES[val].name : val}`, '#e1f5fe'); break;
     case 'host':
       if (MODE !== 'race') { toast('⚠️ ใช้ได้ในโหมดแข่งผู้ติดตาม', '#ffccbc'); break; }
       if ((val === 'in') !== HOST_IN) soon(val === 'in' ? 'ผู้จัดลงแข่ง' : 'ผู้จัดออกจากการแข่ง', () => { setHost(val === 'in'); renderAdmin(); });
@@ -4843,6 +5015,20 @@ function adminAct(kind, val, opt) {
     case 'pause': S.paused = !S.paused; break;
     case 'music': S.musicOn = !S.musicOn; break;
     case 'voice': S.voiceOn = !S.voiceOn; break;
+    case 'ann': ANN.on = !ANN.on; saveAnn(); toast(`📢 ประกาศเหตุการณ์: ${ANN.on ? 'เปิด' : 'ปิด'}`, '#e1f5fe'); if (!ANN.on) ANNQ.length = 0; break;
+    case 'annchat': ANN.chat = !ANN.chat; saveAnn(); toast(`💬 อ่านคอมเมนต์: ${ANN.chat ? 'เปิด' : 'ปิด'}`, '#e1f5fe'); break;
+    case 'comm': ANN.comm = !ANN.comm; saveAnn(); toast(`🏁 พากย์การแข่ง: ${ANN.comm ? 'เปิด' : 'ปิด'}`, '#e1f5fe'); COMM.next = 3; break;
+    case 'vgender':
+      ANN.gender = val === 'm' ? 'm' : 'f'; saveAnn();
+      toast(`${ANN.gender === 'm' ? '👨 เสียงผู้ชาย' : '👩 เสียงผู้หญิง'}`, '#e1f5fe');
+      ANNQ.length = 0; announce('follow', `สวัสดี{k} นี่คือเสียง${ANN.gender === 'm' ? 'ผู้ชาย' : 'ผู้หญิง'}`); break;
+    case 'anntest': {
+      const was = ANN.on; ANN.on = true;
+      announce('follow', thaiVoices().length ? 'ทดสอบเสียงผู้ประกาศ ได้ยินชัดไหม{k}' : '');
+      ANN.on = was;
+      if (!thaiVoices().length) toast('⚠️ เครื่องนี้ไม่มีเสียงภาษาไทย — ติดตั้งใน Windows Settings › Speech', '#ffccbc');
+      break;
+    }
     case 'gifts': { const p = $id('giftPanel'); if (p) p.classList.toggle('hidden'); break; }
   }
   updateAdminStatus(true);
@@ -4879,6 +5065,11 @@ function adminActive(kind, val) {
     case 'pause': return S.paused;
     case 'music': return S.musicOn;
     case 'voice': return S.voiceOn;
+    case 'fontsz': return FONTSZ === val;
+    case 'ann': return ANN.on;
+    case 'annchat': return ANN.chat;
+    case 'comm': return ANN.comm;
+    case 'vgender': return ANN.gender === val;
     case 'gifts': { const p = $id('giftPanel'); return !!p && !p.classList.contains('hidden'); }
   }
   return false;
@@ -4916,6 +5107,8 @@ function renderAdmin() {
   <div class="row">🔍 ความคมภาพ (ภาพไลฟ์เบลอ → เพิ่ม · เครื่องกระตุก → ลด):</div>
   <div class="grid">${['1', '1.5', '2', '2.5'].map(k => btn('sharp', k, `${SHARP_LEVELS[k]} ${k}x`)).join('')}</div>
   <div class="grid one">${btn('fitwin', '', '📐 ปรับหน้าต่างเกมเต็มจอ 9:16 (ไม่มีขอบดำซ้าย/ขวาในไลฟ์)')}</div>
+  <div class="row">🔤 ขนาดตัวหนังสือบนจอ (ตัวบาง อ่านชัดในไลฟ์):</div>
+  <div class="grid">${Object.entries(FONT_SIZES).map(([k, f]) => btn('fontsz', k, `${k === 's' ? '🔡' : k === 'l' ? '🔠' : '🔤'} ${f.name}`)).join('')}</div>
   ${MODE === 'race' ? `
   <div class="row">แบบการแข่ง (เปลี่ยนแล้วเริ่มรอบใหม่):</div>
   <div class="grid">${Object.entries(RACE_TYPES).map(([k, t]) => btn('rtype', k, `${t.icon} ${t.name}`)).join('')}</div>
@@ -4978,6 +5171,10 @@ function renderAdmin() {
   <div class="row">🌗 ช่วงเวลา (ฟ้าค่อยๆ เปลี่ยน · กลางวัน/กลางคืน = ค้างไว้ตลอด):</div>
   <div class="grid">${Object.entries(TIME_MODES).map(([k, t]) => btn('tmode', k, `${t.icon} ${t.name}${t.hour !== undefined ? ` (${t.hour}:00)` : ''}`)).join('')}</div>
   <div class="grid">${btn('hour', -1, '🕐 เวลา -1 ชม.')}${btn('hour', 1, '🕐 เวลา +1 ชม.')}${btn('space', '', '🚀 สุ่มด่านอวกาศ')}${btn('pause', '', '⏸ หยุด/เล่น')}${btn('music', '', '🎵 เพลง')}${btn('voice', '', '🗣️ เสียงพูด')}${btn('gifts', '', '🎁 แผงของขวัญ')}</div>
+  <h4>🎙️ ผู้ประกาศ & พากย์</h4>
+  <div class="grid">${btn('ann', '', '📢 ประกาศเหตุการณ์ (ติดตาม/ของขวัญ/แชร์/คนเข้า)')}${btn('annchat', '', '💬 อ่านคอมเมนต์')}${btn('comm', '', '🏁 พากย์การแข่งอัตโนมัติ')}${btn('anntest', '', '🔊 ทดสอบเสียง')}</div>
+  <div class="grid">${btn('vgender', 'f', '👩 เสียงผู้หญิง')}${btn('vgender', 'm', '👨 เสียงผู้ชาย')}</div>
+  <div class="row" style="opacity:.75">ใช้เสียงภาษาไทยของเครื่อง${PANEL ? '' : ` · เครื่องนี้มีเสียงไทย ${thaiVoices().length} เสียง${thaiVoices().length ? ': ' + adminEsc(thaiVoices().map(v => v.name).join(', ')) : ' (ไม่มี — ติดตั้ง Thai ใน Windows Settings › Time & language › Speech)'}`} · มีเสียงไทยเสียงเดียว → ปรับเสียงสูง/ต่ำแทน</div>
   <div class="vol">🔊 เสียงเอฟเฟกต์ <input type="range" class="sfxVol" min="0" max="100" step="5" value="${Math.round(SFX_VOL * 100)}"> <b class="sfxVolTxt">${SFX_VOL > 0 ? Math.round(SFX_VOL * 100) + '%' : 'ปิด'}</b></div>
   <div class="vol">🌧️ เสียงฝน/ลม <input type="range" class="envVol" min="0" max="100" step="5" value="${Math.round(ENV_VOL * 100)}"> <b class="envVolTxt">${ENV_VOL > 0 ? Math.round(ENV_VOL * 100) + '%' : 'ปิด'}</b></div>
   <div class="vol">🎨 สีฉากพื้นหลัง (จาง ↔ เข้ม) <input type="range" class="bgTone" min="0" max="100" step="5" value="${BGTONE}"> <b class="bgToneTxt">${toneLabel(BGTONE)}</b></div>
@@ -5560,7 +5757,7 @@ function drawTeamRank(x0, y0) {
 function drawRankList(x0, y0) {
   if (MODE === 'race' && RTYPE === 'nation') return drawTeamRank(x0, y0);
   const pz = S.position + PLAYER_Z;
-  const full = S.order || [{ me: true, z: pz }, ...S.rivals].sort((a, b) => b.z - a.z);
+  const full = S.order || (hostOut() ? S.rivals.slice() : [{ me: true, z: pz }, ...S.rivals]).sort((a, b) => b.z - a.z);   // ยังไม่เริ่ม: ผู้จัดไม่ลงแข่ง = ไม่อยู่ในอันดับ
   // คนเยอะ: แสดง 7 อันดับแรก + แถวของคนสร้าง (ถ้าหลุด)
   const MAXR = 8;
   let rows = full.map((o, i) => ({ o, i }));
@@ -5665,7 +5862,7 @@ function drawAvatar(img, cx, cy, rad, name, col) {
 function softText(str, x, y, col, size, weight) {
   font(size, weight);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.22)';
+  ctx.lineJoin = 'round'; ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,0.28)';   // ขอบบางๆ ให้อ่านออกบนพื้นสว่าง (ไม่ฟุ้ง)
   ctx.strokeText(str, x, y);
   ctx.fillStyle = col; ctx.fillText(str, x, y);
 }
@@ -6164,7 +6361,7 @@ else {
   setupGiftPanel();
   setupAdmin();
   connectLive();
-  if (document.fonts && document.fonts.load) document.fonts.load('600 20px Kanit').catch(() => {});
+  if (document.fonts && document.fonts.load) for (const w of [400, 500]) document.fonts.load(`${w} 20px Kanit`).catch(() => {});
   requestAnimationFrame(frame);
   setInterval(() => updateAdminStatus(true), 1000);   // ส่งสถานะให้หน้า /admin แม้เกมหยุดวาด (หน้าต่างถูกบัง)
 }

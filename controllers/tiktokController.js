@@ -152,11 +152,42 @@ async function start(uniqueId) {
       }
       broadcast({ type: 'likes', likes: live.likes });
     });
-    // ดักคนกดติดตาม → เพิ่มนักปั่นของคนนั้นในโหมดแข่ง
-    conn.on(WebcastEvent.FOLLOW, data => {
+    // ดักคนกดติดตาม → เพิ่มนักปั่นของคนนั้นในโหมดแข่ง (ชื่อขึ้นบนนักปั่น + ประกาศชื่อ)
+    const onFollow = data => {
       const u = data.user || {};
-      broadcast({ type: 'social', text: `💖 ${u.nickname || u.uniqueId || 'ผู้ชม'} กดติดตามแล้ว!` });
-      raceModel.addFollower({ uniqueId: u.uniqueId || '', nickname: u.nickname || u.uniqueId || '', avatar: avatarOf(u) });
+      if (!u.uniqueId) return;
+      if (raceModel.race.roster.has(u.uniqueId)) return;   // กดติดตามซ้ำ/เหตุการณ์ซ้ำ → ไม่ประกาศซ้ำ
+      raceModel.addFollower({ uniqueId: u.uniqueId, nickname: u.nickname || u.uniqueId, avatar: avatarOf(u) });
+      console.log(`💖 ${u.nickname || u.uniqueId} กดติดตาม`);
+    };
+    conn.on(WebcastEvent.FOLLOW, onFollow);
+    // สำรอง: TikTok บางครั้งส่งการติดตาม/แชร์มาเป็น social ที่ชื่อ key ต่างไป (ตัวพิมพ์ใหญ่ ฯลฯ) → ดักซ้ำอีกชั้น
+    conn.on(WebcastEvent.SOCIAL, data => {
+      const dt = data && data.common && data.common.displayText;
+      const key = String((dt && (dt.key || dt.defaultPattern)) || '').toLowerCase();
+      if (key.includes('follow')) onFollow(data);
+      else if (key.includes('share')) { const v = viewerOf(data.user); if (v.uniqueId) broadcast({ type: 'social', ev: 'share', ...v, text: `📣 ${v.nickname} แชร์ไลฟ์!` }); }
+    });
+    // เหตุการณ์อื่นที่นิยมประกาศในไลฟ์: สมัครสมาชิก / ซูเปอร์แฟน / กล่องสมบัติ / คำถาม / PK / จำนวนคนดู
+    const social = (ev, data, text) => { const v = viewerOf(data && data.user); broadcast({ type: 'social', ev, ...v, text: text(v.nickname || 'ผู้ชม') }); };
+    conn.on('subNotify', d => social('sub', d, n => `⭐ ${n} สมัครสมาชิก!`));
+    conn.on('superFanJoin', d => social('superfan', d, n => `🌟 ${n} เป็นซูเปอร์แฟน!`));
+    conn.on('envelope', d => social('chest', d, n => `🎁 ${n} แจกกล่องสมบัติ!`));
+    conn.on('questionNew', d => {
+      const q = d && (d.details || d.questionDetails || {});
+      social('question', { user: (q && q.user) || d.user }, n => `❓ ${n} ถาม: ${String((q && (q.text || q.content)) || '').slice(0, 80)}`);
+    });
+    conn.on('linkMicBattle', () => broadcast({ type: 'social', ev: 'pk', text: '⚔️ เริ่ม PK แล้ว!' }));
+    let lastViewers = 0;
+    conn.on(WebcastEvent.ROOM_USER, d => {
+      const n = (d && (d.viewerCount || d.total)) | 0;
+      if (!n) return;
+      live.viewers = n;
+      // ประกาศเมื่อคนดูทะลุหลักใหม่ (10, 20, 50, 100, 200, 500, 1000 ...)
+      const steps = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
+      const hit = steps.filter(s => n >= s && lastViewers < s).pop();
+      if (hit && lastViewers) broadcast({ type: 'social', ev: 'viewers', count: hit, text: `👀 คนดูทะลุ ${hit} คนแล้ว!` });
+      lastViewers = Math.max(lastViewers, n);
     });
     conn.on(WebcastEvent.SHARE, data => {
       const v = viewerOf(data.user);
