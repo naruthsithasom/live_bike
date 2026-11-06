@@ -7,7 +7,7 @@
 
 // ---------------------------------------------------------------- setup
 // เวอร์ชันของไฟล์เกม — แก้โค้ดเมื่อไหร่ให้เปลี่ยนค่านี้ หน้า /admin จะเตือนถ้าหน้าเกมยังใช้ไฟล์เก่า (ยังไม่ได้กด F5)
-const GAME_BUILD = '2026-11-06.12';
+const GAME_BUILD = '2026-11-06.13';
 const W = 540, H = 960;
 const cv = document.getElementById('game');
 let ctx = cv.getContext('2d');
@@ -3889,37 +3889,177 @@ function drawBubble(x, y, text, t) {
   textC(text, bx + tw / 2, y - 14, '#222', 15, 600);
   ctx.globalAlpha = prevA;
 }
+// ---------------------------------------------------------------- 👕 ชุดนักปั่น + จักรยาน (เลือก 3 แบบจากแผงผู้ดูแล)
+//   race    = ชุดแข่งขันปกติ (เสื้อทีม หมวกกันน็อก)
+//   fantasy = แฟนตาซี ชุดสัตว์บก/สัตว์น้ำ (หัวสัตว์ ลาย ครีบ หาง กระดอง)
+//   casual  = วัยรุ่นสบายๆ คละแบบ (เสื้อฮาวาย ยีนส์ ฮู้ด แก๊งสเตอร์ สตรีท)
+// ทุกแบบสุ่มหญิง/ชาย สีผิว ทรงผม สีจักรยาน — สุ่มคงที่ต่อคน (คนเดิมได้ชุดเดิมตลอด)
+const OUTFIT_STYLES = { race: { icon: '🚴', name: 'ชุดแข่งขัน' }, fantasy: { icon: '🦄', name: 'แฟนตาซี สัตว์บก/สัตว์น้ำ' }, casual: { icon: '😎', name: 'วัยรุ่นสบายๆ' } };
+let OUTFIT = (() => { try { const v = localStorage.getItem('mtb.outfit'); return OUTFIT_STYLES[v] ? v : 'race'; } catch (e) { return 'race'; } })();
+const SKINS = ['#ffdbac', '#f1c27d', '#e0ac69', '#c68c5a', '#a26a42', '#8d5524'];
+const HAIRS = ['#1b1b1b', '#3b2a20', '#5a3a22', '#8d5a2b', '#c9a45c', '#b03a2e', '#6d4c8a'];
+const BIKES = ['#e53935', '#1e88e5', '#43a047', '#fdd835', '#8e24aa', '#ff7043', '#00acc1', '#f5f5f5', '#212121', '#ec407a'];
+const ANIMALS = [
+  // สัตว์บก
+  { emo: '🐯', body: '#ff9800', pat: 'stripes', patc: '#212121', tail: '#ff9800' },
+  { emo: '🐱', body: '#9e9e9e', pat: 'stripes', patc: '#616161', tail: '#9e9e9e' },
+  { emo: '🐶', body: '#a1887f', pat: 'spots', patc: '#5d4037', tail: '#a1887f' },
+  { emo: '🐻', body: '#795548', pat: 'belly', patc: '#bcaaa4' },
+  { emo: '🐰', body: '#f5f5f5', pat: 'belly', patc: '#f8bbd0', tail: '#ffffff' },
+  { emo: '🐼', body: '#fafafa', pat: 'panda', patc: '#212121' },
+  { emo: '🦊', body: '#ef6c00', pat: 'belly', patc: '#fff3e0', tail: '#ef6c00' },
+  { emo: '🐸', body: '#7cb342', pat: 'spots', patc: '#33691e' },
+  { emo: '🦁', body: '#ffb300', pat: 'belly', patc: '#fff8e1', tail: '#ffb300' },
+  { emo: '🐵', body: '#8d6e63', pat: 'belly', patc: '#ffccbc' },
+  { emo: '🦄', body: '#f3e5f5', pat: 'rainbow', patc: '#ce93d8' },
+  { emo: '🐷', body: '#f8bbd0', pat: 'belly', patc: '#f48fb1' },
+  // สัตว์น้ำ
+  { emo: '🦈', body: '#78909c', pat: 'belly', patc: '#eceff1', fin: '#546e7a', sea: true },
+  { emo: '🐙', body: '#ab47bc', pat: 'spots', patc: '#e1bee7', sea: true },
+  { emo: '🐠', body: '#ff7043', pat: 'stripes', patc: '#ffffff', fin: '#ffab91', sea: true },
+  { emo: '🐬', body: '#42a5f5', pat: 'belly', patc: '#e3f2fd', fin: '#1e88e5', sea: true },
+  { emo: '🦀', body: '#e53935', pat: 'spots', patc: '#ff8a80', sea: true },
+  { emo: '🐳', body: '#1e88e5', pat: 'belly', patc: '#bbdefb', fin: '#1565c0', sea: true },
+  { emo: '🐢', body: '#689f38', pat: 'shell', patc: '#33691e', sea: true },
+  { emo: '🐧', body: '#263238', pat: 'belly', patc: '#fafafa', sea: true },
+];
+const CASUALS = [
+  { id: 'hawaii', shirts: ['#00897b', '#e53935', '#fbc02d', '#1e88e5', '#8e24aa'], pat: 'flowers', short: true, pants: ['#1565c0', '#c8b48a', '#455a64'], hats: ['none', 'cap', 'glasses', 'straw'] },
+  { id: 'tee', shirts: ['#fafafa', '#212121', '#e53935', '#ffeb3b', '#4caf50'], pat: 'graphic', short: true, pants: ['#1e4f91', '#2b3f6b', '#3f5f9a'], long: true, hats: ['none', 'cap', 'beanie', 'glasses'] },
+  { id: 'hoodie', shirts: ['#424242', '#7e57c2', '#ef5350', '#26a69a', '#ffa726'], pat: 'hoodie', pants: ['#616161', '#212121', '#1e4f91'], long: true, hats: ['none', 'beanie', 'glasses'] },
+  { id: 'gangster', shirts: ['#1c1c1c', '#2b2b2b', '#3e2723'], pat: 'suit', pants: ['#1c1c1c', '#212121'], long: true, hats: ['fedora', 'fedora', 'glasses'], chain: true },
+  { id: 'street', shirts: ['#ff7043', '#29b6f6', '#d4e157', '#f06292', '#ffffff'], pat: 'stripes2', short: true, pants: ['#6d6d4f', '#4e4e3a', '#1e4f91'], long: true, hats: ['cap', 'beanie', 'none'] },
+];
+function setOutfit(v) {
+  if (!OUTFIT_STYLES[v]) return;
+  OUTFIT = v;
+  try { localStorage.setItem('mtb.outfit', v); } catch (e) { /* ignore */ }
+  if (typeof SPRITE_CACHE !== 'undefined') SPRITE_CACHE.clear();
+}
+// ชุดของนักปั่นคนนี้ (สุ่มคงที่จากชื่อ/รหัส + แบบชุดที่เลือก)
+function lookOf(r) {
+  const key = (r.me ? 'me' : (r.uid || r.name || 'x' + r.idx)) + '|' + OUTFIT + '|' + (r.jersey || '');
+  if (r._lookKey === key) return r._look;
+  const rnd = mulberry32(hashStr(key));
+  const pk = a => a[Math.floor(rnd() * a.length)];
+  const female = rnd() < 0.5;
+  const L = { female, skin: pk(SKINS), hair: pk(HAIRS), bike: pk(BIKES), shoes: pk(['#212121', '#fafafa', '#e53935', '#1e88e5']), long: false, sleeve: null, pat: null, hat: 'helmet', hatc: r.helmet || '#fff' };
+  if (OUTFIT === 'race') {
+    Object.assign(L, { shirt: r.jersey, pants: r.shorts || '#222', pat: 'race', bike: r.jersey && rnd() < 0.5 ? r.jersey : L.bike });
+  } else if (OUTFIT === 'fantasy') {
+    const a = pk(ANIMALS);
+    Object.assign(L, { animal: a, shirt: a.body, pants: a.body, long: true, pat: a.pat, patc: a.patc, hat: 'animal', shoes: a.sea ? '#90caf9' : '#5d4037', bike: a.sea ? pk(['#4fc3f7', '#26c6da', '#1e88e5', '#ffffff']) : pk(BIKES) });
+  } else {
+    const c = pk(CASUALS);
+    Object.assign(L, { casual: c.id, shirt: pk(c.shirts), pants: pk(c.pants), long: !!c.long && (!c.short || rnd() < 0.6), pat: c.pat, short: !!c.short, hat: pk(c.hats), hatc: pk(['#212121', '#e53935', '#1e88e5', '#fdd835', '#fafafa', '#6d4c41']), chain: !!c.chain || rnd() < 0.15 });
+    if (L.hat === 'fedora') L.hatc = '#1c1c1c';
+  }
+  // ทีมชาติ (ชุดไม่ใช่ชุดแข่ง): คาดสายสะพายสีทีม จะได้รู้ว่าอยู่ทีมไหน
+  L.sash = RTYPE === 'nation' && MODE === 'race' && OUTFIT !== 'race' && r.team ? r.jersey : null;
+  r._lookKey = key; r._look = L;
+  return L;
+}
+// ลาย/รายละเอียดบนลำตัว (มุมหลัง) · กรอบลำตัว: กว้าง ±70→±105 สูง y-420 → y-640
+function drawTorsoPattern(L, x, y, s, front) {
+  const top = y - (front ? 610 : 640) * s, bot = y - (front ? 440 : 420) * s, hgt = bot - top;
+  const c = L.patc || 'rgba(255,255,255,0.35)';
+  switch (L.pat) {
+    case 'race': poly([x - 18 * s, bot - 5 * s, x + 18 * s, bot - 5 * s, x + 22 * s, top + 5 * s, x - 22 * s, top + 5 * s], 'rgba(255,255,255,0.35)'); break;
+    case 'stripes': for (let i = 0; i < 3; i++) { const yy = top + hgt * (0.2 + i * 0.27); poly([x - 90 * s, yy, x - 20 * s, yy + 16 * s, x - 30 * s, yy + 30 * s, x - 85 * s, yy + 18 * s], c); poly([x + 90 * s, yy, x + 20 * s, yy + 16 * s, x + 30 * s, yy + 30 * s, x + 85 * s, yy + 18 * s], c); } break;
+    case 'spots': ell(x - 40 * s, top + hgt * 0.3, 18 * s, 15 * s, c); ell(x + 45 * s, top + hgt * 0.55, 22 * s, 18 * s, c); ell(x - 10 * s, top + hgt * 0.78, 14 * s, 12 * s, c); break;
+    case 'belly': if (front) ell(x, top + hgt * 0.55, 55 * s, hgt * 0.42, c); else ell(x, top + hgt * 0.15, 40 * s, 18 * s, c); break;
+    case 'panda': ell(x - 70 * s, top + 25 * s, 40 * s, 30 * s, c); ell(x + 70 * s, top + 25 * s, 40 * s, 30 * s, c); break;
+    case 'rainbow': ['#ef9a9a', '#ffe082', '#a5d6a7', '#90caf9'].forEach((col, i) => { ctx.fillStyle = col; ctx.fillRect(x - 80 * s, top + hgt * (0.25 + i * 0.13), 160 * s, hgt * 0.1); }); break;
+    case 'shell':
+      ell(x, top + hgt * 0.5, 100 * s, hgt * 0.55, '#558b2f');
+      ctx.strokeStyle = c; ctx.lineWidth = Math.max(1, 6 * s);
+      for (const [dx, dy] of [[0, 0], [-45, -40], [45, -40], [-45, 40], [45, 40]]) { ctx.beginPath(); ctx.ellipse(x + dx * s, top + hgt * 0.5 + dy * s, 26 * s, 22 * s, 0, 0, 6.283); ctx.stroke(); }
+      break;
+    case 'flowers': for (const [dx, f] of [[-55, 0.25], [40, 0.4], [-20, 0.7], [60, 0.8]]) { const fx = x + dx * s, fy = top + hgt * f; for (let i = 0; i < 5; i++) ell(fx + Math.cos(i * 1.257) * 11 * s, fy + Math.sin(i * 1.257) * 11 * s, 9 * s, 9 * s, 'rgba(255,255,255,0.85)'); ell(fx, fy, 6 * s, 6 * s, '#ffeb3b'); } break;
+    case 'graphic': if (front) { rr(x - 40 * s, top + hgt * 0.3, 80 * s, 50 * s, 12 * s, L.shirt === '#fafafa' ? '#e53935' : '#fafafa'); } else { ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(x - 60 * s, top + hgt * 0.35, 120 * s, 14 * s); } break;
+    case 'hoodie': ell(x, top + 20 * s, 70 * s, 40 * s, 'rgba(0,0,0,0.25)'); if (front) { ctx.strokeStyle = '#fafafa'; ctx.lineWidth = Math.max(1, 4 * s); ctx.beginPath(); ctx.moveTo(x - 15 * s, top + 25 * s); ctx.lineTo(x - 15 * s, top + 75 * s); ctx.moveTo(x + 15 * s, top + 25 * s); ctx.lineTo(x + 15 * s, top + 75 * s); ctx.stroke(); } break;
+    case 'suit':
+      if (front) { poly([x - 30 * s, top, x + 30 * s, top, x, top + hgt * 0.75], '#fafafa'); poly([x - 8 * s, top + 10 * s, x + 8 * s, top + 10 * s, x + 10 * s, top + hgt * 0.6, x - 10 * s, top + hgt * 0.6], '#b71c1c'); }
+      else { ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(x - 2 * s, top + 20 * s, 4 * s, hgt - 30 * s); }
+      break;
+    case 'stripes2': ctx.fillStyle = 'rgba(0,0,0,0.22)'; for (let i = 0; i < 2; i++) ctx.fillRect(x - 95 * s, top + hgt * (0.35 + i * 0.22), 190 * s, 14 * s); break;
+  }
+  if (L.sash) { ctx.strokeStyle = L.sash; ctx.lineWidth = Math.max(1, 22 * s); ctx.beginPath(); ctx.moveTo(x - 85 * s, top + 10 * s); ctx.lineTo(x + 75 * s, bot - 10 * s); ctx.stroke(); }
+  if (L.chain && front) { ctx.strokeStyle = '#ffd54f'; ctx.lineWidth = Math.max(1, 6 * s); ctx.beginPath(); ctx.arc(x, top + 5 * s, 38 * s, 0.3, Math.PI - 0.3); ctx.stroke(); }
+}
+// หัว: หมวกกันน็อก / หัวสัตว์ / ผม+หมวกแบบวัยรุ่น · รูปโปรไฟล์ผู้ติดตามยังเป็นหัวเหมือนเดิม แล้วใส่หมวก/หูสัตว์ทับ
+function drawLookHead(L, x, y, s, r, front) {
+  const hy = y - (front ? 692 : 712) * s;
+  // ผมยาว/หางม้า (ผู้หญิง) อยู่หลังหัว
+  if (L.female && L.hat !== 'animal') {
+    if (front) { ell(x - 46 * s, hy + 30 * s, 16 * s, 60 * s, L.hair); ell(x + 46 * s, hy + 30 * s, 16 * s, 60 * s, L.hair); }
+    else ell(x, hy + 70 * s, 26 * s, 70 * s, L.hair);
+  }
+  const avatar = drawAvatarHead(x, hy, 84 * s, r);
+  if (L.hat === 'animal') {
+    if (avatar) drawEmo(L.animal.emo, x, hy - 60 * s, 90 * s);   // มาสคอตสัตว์บนหัว
+    else drawEmo(L.animal.emo, x, hy + 70 * s, 160 * s);         // หัวเป็นสัตว์เลย
+    return;
+  }
+  if (!avatar) {
+    ell(x, y - (front ? 660 : 690) * s, front ? 44 * s : 50 * s, front ? 48 * s : 46 * s, L.skin);
+    if (L.hat === 'helmet') {
+      if (front) rr(x - 44 * s, y - 680 * s, 88 * s, 22 * s, 10 * s, 'rgba(20,20,30,0.9)');
+      ell(x, y - (front ? 700 : 705) * s, front ? 60 * s : 62 * s, front ? 40 * s : 50 * s, L.hatc);
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      for (let i = -1; i <= 1; i++) ctx.fillRect(x + i * 22 * s - 4 * s, y - (front ? 730 : 745) * s, 8 * s, (front ? 26 : 40) * s);
+      return;
+    }
+    ell(x, y - (front ? 690 : 700) * s, 50 * s, front ? 30 * s : 40 * s, L.hair);   // ผม
+    if (L.hat === 'glasses' && front) rr(x - 40 * s, y - 675 * s, 80 * s, 16 * s, 7 * s, 'rgba(10,10,10,0.9)');
+  }
+  const top = avatar ? hy - 70 * s : y - 720 * s;
+  if (L.hat === 'cap') { ell(x, top + 10 * s, 58 * s, 26 * s, L.hatc); ell(x, top + (front ? 30 : 2) * s, 52 * s, 10 * s, L.hatc); }
+  else if (L.hat === 'beanie') { ell(x, top + 10 * s, 54 * s, 34 * s, L.hatc); ell(x, top - 24 * s, 12 * s, 12 * s, '#fafafa'); }
+  else if (L.hat === 'fedora') { ell(x, top + 26 * s, 84 * s, 16 * s, L.hatc); rr(x - 46 * s, top - 30 * s, 92 * s, 56 * s, 14 * s, L.hatc); ctx.fillStyle = '#b71c1c'; ctx.fillRect(x - 46 * s, top + 8 * s, 92 * s, 10 * s); }
+  else if (L.hat === 'straw') { ell(x, top + 26 * s, 88 * s, 18 * s, '#e6c76e'); ell(x, top + 6 * s, 46 * s, 30 * s, '#e6c76e'); }
+}
+// ครีบ/หาง/กระดองด้านหลัง (ชุดสัตว์ มุมหลัง)
+function drawAnimalExtras(L, x, y, s) {
+  const a = L.animal;
+  if (!a) return;
+  if (a.fin) poly([x - 25 * s, y - 560 * s, x + 25 * s, y - 560 * s, x + 6 * s, y - 690 * s], a.fin);
+  if (a.tail) { ctx.strokeStyle = a.tail; ctx.lineWidth = Math.max(1, 20 * s); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y - 430 * s); ctx.quadraticCurveTo(x + 90 * s, y - 380 * s + Math.sin(S.t * 6) * 20 * s, x + 70 * s, y - 300 * s); ctx.stroke(); ctx.lineCap = 'butt'; }
+}
 function drawRiderBody(x, y, k, r) {
   if (MIR < 0) return drawRiderFront(x, y, k, r);
-  const s = k;
-  const ph = r.phase;
+  const s = k, ph = r.phase, L = lookOf(r);
   ell(x, y, 120 * s, 22 * s, 'rgba(0,0,0,0.3)');
+  // ล้อหลัง + บังโคลนสีจักรยาน
   ell(x, y - 140 * s, 24 * s, 140 * s, '#111');
   ctx.strokeStyle = '#9e9e9e'; ctx.lineWidth = Math.max(1, 4 * s);
   ctx.beginPath(); ctx.ellipse(x, y - 140 * s, 10 * s, 112 * s, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = L.bike; ctx.lineWidth = Math.max(1, 14 * s);
+  ctx.beginPath(); ctx.ellipse(x, y - 140 * s, 26 * s, 150 * s, 0, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke();
   ctx.lineCap = 'round';
   for (const side of [-1, 1]) {
     const a = side < 0 ? ph : ph + Math.PI;
     const hipX = x + side * 45 * s, hipY = y - 430 * s;
     const footX = x + side * 62 * s, footY = y - (170 + 75 * Math.sin(a)) * s;
     const kneeX = x + side * 80 * s, kneeY = (hipY + footY) / 2 - 30 * s;
-    ctx.strokeStyle = r.shorts; ctx.lineWidth = Math.max(1, 46 * s);
+    ctx.strokeStyle = L.pants; ctx.lineWidth = Math.max(1, 46 * s);
     ctx.beginPath(); ctx.moveTo(hipX, hipY); ctx.lineTo(kneeX, kneeY); ctx.stroke();
-    ctx.strokeStyle = '#c68c5a'; ctx.lineWidth = Math.max(1, 34 * s);
+    ctx.strokeStyle = L.long ? L.pants : L.skin; ctx.lineWidth = Math.max(1, (L.long ? 40 : 34) * s);
     ctx.beginPath(); ctx.moveTo(kneeX, kneeY); ctx.lineTo(footX, footY); ctx.stroke();
-    ell(footX, footY + 8 * s, 22 * s, 14 * s, '#222');
+    ell(footX, footY + 8 * s, 22 * s, 14 * s, L.shoes);
   }
-  poly([x - 70 * s, y - 420 * s, x + 70 * s, y - 420 * s, x + 105 * s, y - 640 * s, x - 105 * s, y - 640 * s], r.jersey);
-  poly([x - 18 * s, y - 425 * s, x + 18 * s, y - 425 * s, x + 22 * s, y - 635 * s, x - 22 * s, y - 635 * s], 'rgba(255,255,255,0.35)');
-  ctx.strokeStyle = r.jersey; ctx.lineWidth = Math.max(1, 36 * s);
-  for (const side of [-1, 1]) { ctx.beginPath(); ctx.moveTo(x + side * 95 * s, y - 620 * s); ctx.lineTo(x + side * 165 * s, y - 470 * s); ctx.stroke(); }
+  drawAnimalExtras(L, x, y, s);
+  const fem = L.female ? 0.9 : 1;   // ผู้หญิงไหล่แคบกว่านิดหน่อย
+  poly([x - 70 * s, y - 420 * s, x + 70 * s, y - 420 * s, x + 105 * fem * s, y - 640 * s, x - 105 * fem * s, y - 640 * s], L.shirt);
+  drawTorsoPattern(L, x, y, s, false);
+  for (const side of [-1, 1]) {
+    const ax = x + side * 95 * fem * s, ay = y - 620 * s, ex = x + side * 165 * s, ey = y - 470 * s;
+    ctx.strokeStyle = L.shirt; ctx.lineWidth = Math.max(1, 36 * s);
+    if (L.short) { const mx = (ax + ex) / 2, my = (ay + ey) / 2; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(mx, my); ctx.stroke(); ctx.strokeStyle = L.skin; ctx.lineWidth = Math.max(1, 28 * s); ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(ex, ey); ctx.stroke(); }
+    else { ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ex, ey); ctx.stroke(); }
+  }
   ctx.lineCap = 'butt';
-  if (!drawAvatarHead(x, y - 712 * s, 84 * s, r)) {
-    ell(x, y - 690 * s, 50 * s, 46 * s, '#c68c5a');
-    ell(x, y - 705 * s, 62 * s, 50 * s, r.helmet);
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    for (let i = -1; i <= 1; i++) ctx.fillRect(x + i * 22 * s - 4 * s, y - 745 * s, 8 * s, 40 * s);
-  }
+  drawLookHead(L, x, y, s, r, false);
   if (ENV.dark > 0.25) {
     ell(x, y - 300 * s, 14 * s, 10 * s, '#ff1744');
     LIGHTS.push({ x, y: y - 300 * s, r: 90 * s + 4, c: '255,40,60' });
@@ -4553,12 +4693,12 @@ function drawCrowd() {
 
 // นักปั่นมองจากด้านหน้า (ใช้ตอนกล้องหันหลัง / มุมหน้าขบวน)
 function drawRiderFront(x, y, k, r) {
-  const s = k, ph = r.phase;
+  const s = k, ph = r.phase, L = lookOf(r);
   ell(x, y, 120 * s, 22 * s, 'rgba(0,0,0,0.3)');
   ell(x, y - 140 * s, 22 * s, 140 * s, '#111');
   ctx.strokeStyle = '#9e9e9e'; ctx.lineWidth = Math.max(1, 4 * s);
   ctx.beginPath(); ctx.ellipse(x, y - 140 * s, 9 * s, 112 * s, 0, 0, Math.PI * 2); ctx.stroke();
-  ctx.strokeStyle = '#2b2b2b'; ctx.lineWidth = Math.max(1, 12 * s);
+  ctx.strokeStyle = L.bike; ctx.lineWidth = Math.max(1, 12 * s);   // โช๊คหน้าสีจักรยาน
   ctx.beginPath(); ctx.moveTo(x - 16 * s, y - 150 * s); ctx.lineTo(x, y - 360 * s); ctx.lineTo(x + 16 * s, y - 150 * s); ctx.stroke();
   ctx.lineCap = 'round';
   for (const side of [-1, 1]) {
@@ -4566,33 +4706,33 @@ function drawRiderFront(x, y, k, r) {
     const hipX = x + side * 48 * s, hipY = y - 440 * s;
     const footX = x + side * 58 * s, footY = y - (170 + 75 * Math.sin(a)) * s;
     const kneeX = x + side * 72 * s, kneeY = y - (360 + 55 * Math.sin(a)) * s;
-    ctx.strokeStyle = r.shorts; ctx.lineWidth = Math.max(1, 48 * s);
+    ctx.strokeStyle = L.pants; ctx.lineWidth = Math.max(1, 48 * s);
     ctx.beginPath(); ctx.moveTo(hipX, hipY); ctx.lineTo(kneeX, kneeY); ctx.stroke();
-    ctx.strokeStyle = '#c68c5a'; ctx.lineWidth = Math.max(1, 34 * s);
+    ctx.strokeStyle = L.long ? L.pants : L.skin; ctx.lineWidth = Math.max(1, (L.long ? 40 : 34) * s);
     ctx.beginPath(); ctx.moveTo(kneeX, kneeY); ctx.lineTo(footX, footY); ctx.stroke();
-    ell(footX, footY + 8 * s, 20 * s, 14 * s, '#222');
+    ell(footX, footY + 8 * s, 20 * s, 14 * s, L.shoes);
   }
   // ลำตัว (เอนไปข้างหน้า)
-  poly([x - 72 * s, y - 440 * s, x + 72 * s, y - 440 * s, x + 108 * s, y - 610 * s, x - 108 * s, y - 610 * s], r.jersey);
-  ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(x - 108 * s, y - 560 * s, 216 * s, 22 * s);
-  if (s * 700 > 30 && !r.extra) textC(String(r.idx + 1), x, y - 495 * s, '#222', Math.max(6, 50 * s), 800);
+  const fem = L.female ? 0.9 : 1;
+  poly([x - 72 * s, y - 440 * s, x + 72 * s, y - 440 * s, x + 108 * fem * s, y - 610 * s, x - 108 * fem * s, y - 610 * s], L.shirt);
+  if (L.pat === 'race') {
+    ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(x - 108 * s, y - 560 * s, 216 * s, 22 * s);
+    if (s * 700 > 30 && !r.extra) textC(String(r.idx + 1), x, y - 495 * s, '#222', Math.max(6, 50 * s), 800);
+  } else drawTorsoPattern(L, x, y, s, true);
   // แขน + แฮนด์
-  ctx.strokeStyle = r.jersey; ctx.lineWidth = Math.max(1, 34 * s);
-  for (const side of [-1, 1]) { ctx.beginPath(); ctx.moveTo(x + side * 98 * s, y - 600 * s); ctx.lineTo(x + side * 150 * s, y - 440 * s); ctx.stroke(); }
+  for (const side of [-1, 1]) {
+    const ax = x + side * 98 * fem * s, ay = y - 600 * s, ex = x + side * 150 * s, ey = y - 440 * s;
+    ctx.strokeStyle = L.shirt; ctx.lineWidth = Math.max(1, 34 * s);
+    if (L.short) { const mx = (ax + ex) / 2, my = (ay + ey) / 2; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(mx, my); ctx.stroke(); ctx.strokeStyle = L.skin; ctx.lineWidth = Math.max(1, 26 * s); ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(ex, ey); ctx.stroke(); }
+    else { ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ex, ey); ctx.stroke(); }
+  }
   ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = Math.max(1, 14 * s);
   ctx.beginPath(); ctx.moveTo(x - 175 * s, y - 425 * s); ctx.lineTo(x + 175 * s, y - 425 * s); ctx.stroke();
   ctx.lineCap = 'butt';
   ell(x - 150 * s, y - 430 * s, 22 * s, 18 * s, '#222');
   ell(x + 150 * s, y - 430 * s, 22 * s, 18 * s, '#222');
-  // หน้า + แว่น + หมวก (ผู้ติดตาม/คนสร้าง: รูปโปรไฟล์แทนหัว)
-  if (!drawAvatarHead(x, y - 692 * s, 84 * s, r)) {
-    ell(x, y - 660 * s, 44 * s, 48 * s, '#c68c5a');
-    rr(x - 44 * s, y - 680 * s, 88 * s, 22 * s, 10 * s, 'rgba(20,20,30,0.9)');
-    if (r.say) ell(x, y - 630 * s, 12 * s, 9 * s, '#5d1f1f');
-    ell(x, y - 700 * s, 60 * s, 40 * s, r.helmet);
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    for (let i = -1; i <= 1; i++) ctx.fillRect(x + i * 22 * s - 4 * s, y - 730 * s, 8 * s, 26 * s);
-  }
+  // หน้า + หมวก/หัวสัตว์ (ผู้ติดตาม/คนสร้าง: รูปโปรไฟล์แทนหัว)
+  drawLookHead(L, x, y, s, r, true);
   if (ENV.dark > 0.25) {
     ell(x, y - 380 * s, 12 * s, 10 * s, '#fffde7');
     LIGHTS.push({ x, y: y - 380 * s, r: 140 * s + 6, c: '255,250,220' });
@@ -4744,7 +4884,7 @@ function toggleAdmin() {
 // ---- หน้า /admin: ส่งคำสั่ง / รับสถานะจากหน้าเกมผ่านเซิร์ฟเวอร์
 const REMOTE = { on: new Set(), age: -1, mode: null, pend: new Map() };
 // กดปุ่มในหน้า /admin แล้วติดไฟทันที (เดาผลไว้ก่อน) ไม่ต้องรอหน้าเกมตอบกลับ — หน้าเกมยืนยันแล้วค่อยใช้ค่าจริง
-const PRED_SINGLE = new Set(['mode', 'track', 'cohesion', 'sharp', 'rtype', 'camstyle', 'pack', 'action', 'tmode', 'host', 'vgender', 'fontsz', 'rmin']);
+const PRED_SINGLE = new Set(['mode', 'track', 'cohesion', 'sharp', 'rtype', 'camstyle', 'pack', 'action', 'tmode', 'host', 'vgender', 'fontsz', 'rmin', 'outfit']);
 const PRED_TOGGLE = new Set(['space', 'pause', 'music', 'voice', 'flist', 'gifts', 'regroup', 'ann', 'annchat', 'comm']);
 const PRED_SKIP = new Set(['sfxvol', 'envvol', 'bgtone', 'rspd', 'close']);
 function predictPanel(kind, val) {
@@ -4898,13 +5038,32 @@ function adminAct(kind, val, opt) {
     if (!w) toast(`⚠️ เบราว์เซอร์บล็อกหน้าต่างใหม่ — เปิด http://localhost:3000/${kind} เองได้`, '#ffccbc');
     return;
   }
+  if (kind === 'copyurl') {   // 📋 คัดลอกลิงก์ (ทำในหน้าที่กด ไม่ส่งต่อให้หน้าเกม)
+    const url = location.origin + (val || '/');
+    const done = ok => {
+      toast(ok ? `📋 คัดลอกแล้ว: ${url}` : `⚠️ คัดลอกไม่ได้ — ลิงก์: ${url}`, ok ? '#b9f6ca' : '#ffccbc');
+      // แจ้งบนปุ่มที่กด (หน้าแผงไม่มีจอเกมให้เห็น toast)
+      document.querySelectorAll(`button[data-k="copyurl"][data-v="${CSS.escape(val || '/')}"]`).forEach(b => {
+        const old = b.dataset.label || (b.dataset.label = b.innerHTML);
+        b.innerHTML = ok ? '✅ คัดลอกแล้ว' : `⚠️ ${adminEsc(url)}`;
+        setTimeout(() => { b.innerHTML = old; }, ok ? 1500 : 6000);
+      });
+    };
+    const fallback = () => {
+      try { const ta = document.createElement('textarea'); ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); done(ok); } catch (e) { done(false); }
+    };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(url).then(() => done(true), fallback); else fallback();
+    return;
+  }
   if (PANEL && kind !== 'tkconnect' && kind !== 'tkstop') { panelSend(kind, val); return; }
   if (!opt) initAudio();
   const target = opt && Number.isInteger(opt.target) ? opt.target : parseInt((document.getElementById('admTarget') || {}).value || '0', 10) || 0;
   const other = (list, cur) => pick(list.filter(x => x !== cur));
   switch (kind) {
     case 'action': ADMIN.last = val; onLiveMessage({ type: 'gift', user: 'แอดมิน', giftName: 'ทดสอบ', count: 1, diamonds: 0, action: val, repeat: 1, target }); break;
-    case 'cheat': ADMIN.last = 'cheat'; doCheat(pick(S.rivals)); break;
+    case 'cheat':
+      if (MODE === 'race' && RTYPE === 'fair') { toast('⚖️ แฟร์เกม: บอทไม่โกง', '#e1f5fe'); break; }
+      ADMIN.last = 'cheat'; doCheat(pick(S.rivals)); break;
     // ---- โหมดแข่งผู้ติดตาม
     case 'mode': if (val !== MODE) soon(val === 'race' ? 'สลับเป็นโหมดแข่งผู้ติดตาม' : 'สลับเป็นโหมดจำลองการเล่น', () => { setMode(val); renderAdmin(); }); break;
     case 'rfollow': {
@@ -5026,6 +5185,9 @@ function adminAct(kind, val, opt) {
       } else apply(Object.assign({}, RACE.stage || { no: 1, startedAt: Date.now() }, { durationMs: mn * 60000, serverNow: Date.now() }));
       break;
     }
+    case 'outfit':
+      if (OUTFIT_STYLES[val] && val !== OUTFIT) soon(`ชุดนักปั่น: ${OUTFIT_STYLES[val].icon} ${OUTFIT_STYLES[val].name}`, () => { setOutfit(val); CAM.flash = 1; confetti(30); renderAdmin(); });
+      break;
     case 'fontsz': setFontSize(val); toast(`🔤 ตัวหนังสือ: ${FONT_SIZES[val] ? FONT_SIZES[val].name : val}`, '#e1f5fe'); break;
     case 'host':
       if (MODE !== 'race') { toast('⚠️ ใช้ได้ในโหมดแข่งผู้ติดตาม', '#ffccbc'); break; }
@@ -5115,6 +5277,7 @@ function adminActive(kind, val) {
     case 'music': return S.musicOn;
     case 'voice': return S.voiceOn;
     case 'fontsz': return FONTSZ === val;
+    case 'outfit': return OUTFIT === val;
     case 'rmin': return !!RACE.stage && Math.round(RACE.stage.durationMs / 60000) === parseInt(val, 10);
     case 'ann': return ANN.on;
     case 'annchat': return ANN.chat;
@@ -5140,127 +5303,147 @@ function renderAdmin() {
     : '';
   const btn = (kind, val, label) => `<button data-k="${kind}" data-v="${adminEsc(val)}"${val === 'random' ? ' class="rnd"' : ''}>${label}</button>`;
   const rnd = kind => btn(kind, 'random', '🎲 สุ่มอัตโนมัติ');
+  const race = MODE === 'race';
+  // หมวดพับ/กางได้ · จำว่าเปิดหมวดไหนไว้ (วาดแผงใหม่แล้วไม่พับกลับเอง)
+  if (!ADMIN.secOpen) { try { ADMIN.secOpen = JSON.parse(localStorage.getItem('mtb.adminSec') || '{}'); } catch (e) { ADMIN.secOpen = {}; } }
+  const sec = (icon, title, body, open) => `<details class="asec" data-s="${adminEsc(title)}"${(ADMIN.secOpen[title] ?? open) ? ' open' : ''}><summary><h4>${icon} ${title}</h4></summary>${body}</details>`;
+  const copyBtn = (path, label) => `<button data-k="copyurl" data-v="${adminEsc(path)}">📋 ${label}</button>`;
   el.innerHTML = `
   <div class="ah"><b>🛠️ แผงผู้ดูแล (Admin)</b><button data-k="close">✕</button></div>
   <div id="admNote" class="note"></div>
-  <div class="grid one">${btn('reloadgame', '', '🔄 รีโหลดหน้าเกมทุกจอ (หลังอัปเดตไฟล์เกม)')}</div>
   <div id="admStatus" class="stat"></div>
+  <div class="grid">${btn('pause', '', '⏸ หยุด/เล่น')}${btn('reloadgame', '', '🔄 รีโหลดหน้าเกมทุกจอ')}</div>
 
-  <h4>🏁 โหมดเกม</h4>
-  <div class="grid">${btn('mode', 'race', '🏁 แข่งผู้ติดตาม')}${btn('mode', 'sim', '🎮 จำลองการเล่น')}</div>
-  <div class="grid one">${btn('reset', '', '🔄 เริ่มเกมใหม่ (ทุกคนกลับเส้นสตาร์ต · นับเวลาด่านใหม่)')}</div>
-  <div class="grid one">${btn('monitor', '', '📈 ดูประสิทธิภาพเครื่อง (CPU · RAM · GPU · เน็ต · อุณหภูมิ · FPS เกม) — เปิดหน้าใหม่')}</div>
-  <div class="grid one">${btn('eventlog', '', '📜 Log เหตุการณ์ TikTok ทุกชนิด (แชท ของขวัญ ไลก์ เข้าห้อง ติดตาม PK ฯลฯ) — เปิดหน้าใหม่')}</div>
-  <div class="grid">${btn('followers', '', '👥 ดูรายชื่อผู้ติดตามล่าสุด (หน้าใหม่)')}${btn('flist', '', '📋 แสดงผู้ติดตามล่าสุด 10 ชื่อบนจอ')}</div>
-  <div class="vol">🏎️ ความเร็วการแข่ง <input type="range" class="rSpd" min="0" max="100" step="5" value="${RSPD.goal}"> <b class="rSpdTxt">${rspdLabel(RSPD.goal)}</b></div>
-  <div class="row" style="opacity:.75">ใช้กับทุกคนในสนาม · ค่อยๆ เร่ง/ชะลอ ราว 2 วิ · 75% = ปกติ (ค่าเริ่มต้น) · 100% = เร็วขึ้น · 0% = หยุดทั้งสนาม</div>
-  <div class="row">🔍 ความคมภาพ (ภาพไลฟ์เบลอ → เพิ่ม · เครื่องกระตุก → ลด):</div>
-  <div class="grid">${['1', '1.5', '2', '2.5'].map(k => btn('sharp', k, `${SHARP_LEVELS[k]} ${k}x`)).join('')}</div>
-  <div class="grid one">${btn('fitwin', '', '📐 ปรับหน้าต่างเกมเต็มจอ 9:16 (ไม่มีขอบดำซ้าย/ขวาในไลฟ์)')}</div>
-  <div class="row">🔤 ขนาดตัวหนังสือบนจอ (ตัวบาง อ่านชัดในไลฟ์):</div>
-  <div class="grid">${Object.entries(FONT_SIZES).map(([k, f]) => btn('fontsz', k, `${k === 's' ? '🔡' : k === 'l' ? '🔠' : '🔤'} ${f.name}`)).join('')}</div>
-  ${MODE === 'race' ? `
-  <div class="row">แบบการแข่ง (เปลี่ยนแล้วเริ่มรอบใหม่):</div>
-  <div class="grid">${Object.entries(RACE_TYPES).map(([k, t]) => btn('rtype', k, `${t.icon} ${t.name}`)).join('')}</div>
-  <div class="row" style="opacity:.75">${Object.values(RACE_TYPES).map(t => `${t.icon} <b>${t.name}</b>: ${t.tip}`).join('<br>')}</div>
-  <div class="row">⏱️ เวลาต่อรอบ (ค่าเริ่มต้น 15 นาที · เปลี่ยนแล้วใช้กับรอบนี้ทันที):</div>
-  <div class="grid">${['15', '30', '45', '60'].map(v => btn('rmin', v, `⏱️ ${v} นาที`)).join('')}</div>
-  <div class="row">🙋 ผู้จัด / เจ้าของช่อง (เริ่มเกมทุกครั้ง = ไม่ลงแข่ง):</div>
-  <div class="grid">${btn('host', 'out', '🪑 ผู้จัดไม่ลงแข่ง')}${btn('host', 'in', '🙋 ผู้จัดลงแข่ง')}</div>
-  <div class="row">🤖 จำนวนบอท ${RACE_TYPES[RTYPE].icon} ${RACE_TYPES[RTYPE].name}${RTYPE === 'nation' ? ' (ต่อชาติ สูงสุด 4)' : ''} — ตอนนี้ ${botLabel(RTYPE)}:</div>
-  <div class="grid">${BOT_CHOICES.filter(k => RTYPE !== 'nation' || +k <= 4).map(k => btn('bots', k, k === '0' ? '0 ไม่มีบอท' : k)).join('')}${btn('bots', 'def', `↩️ ค่าเริ่มต้น (${BOT_DEFAULT[RTYPE]})`)}</div>
-  <div class="row" style="opacity:.75">ค่าเริ่มต้น: แข่งปกติ 3 · ทีมชาติ ชาติละ 2 (สุ่ม 6 ชาติ) · Survival 6 (สำรอง) · แฟร์เกม 4 · กลั่นแกล้ง 8</div>
-  <div class="row">ทดสอบโหมดแข่ง (ไม่ต้องไลฟ์):</div>
-  <div class="grid">${btn('rfollow', '', '➕ จำลองคนกดติดตาม')}${btn('rjoin', '', '👋 คนติดตามอยู่แล้วเข้าห้อง')}${btn('rlike', '', '❤️ ผู้ติดตามเคาะจอรัว 20 ครั้ง')}${Object.entries(RACE_CAT).map(([k, c]) => btn('rgift', k, `${c.icon} ของขวัญ${c.name}`)).join('')}${btn('rbig', '', '🌌 ผู้ติดตามส่ง 1000💎')}${btn('rend', '', '⏭️ จบด่านทันที')}${btn('rclear', '', '🧹 ล้างผู้ติดตาม')}</div>
-  <table>
-    <tr><td>กดติดตาม</td><td>ได้นักปั่นของตัวเอง ชื่อ + รูปโปรไฟล์บนหัว (สูงสุด ${RACE.maxRiders} คน รวมคนสร้างและบอท 4)</td></tr>
-    <tr><td>ของขวัญ</td><td>ผู้ส่งพุ่งนำตามราคา (1.5 ม./💎 สำหรับช่วยตัวเอง) + ผลตามประเภท · แก้ได้ที่ "raceGifts" ใน config.json</td></tr>
-    ${(RACE.tiers && RACE.tiers.length ? RACE.tiers : DEFAULT_RACE_TIERS).slice().sort((a, b) => a.min - b.min).map(t => `<tr><td>💎 ${t.min}+</td><td>${RACE_CAT[t.cat] ? RACE_CAT[t.cat].icon + ' ' + RACE_CAT[t.cat].name + ' — ' + RACE_CAT[t.cat].tip : adminEsc(t.cat)}</td></tr>`).join('')}
-    <tr><td>รอบ</td><td>${Math.round((RACE.stage ? RACE.stage.durationMs : 1800000) / 60000)} นาที · 40 วิสุดท้ายมีเส้นชัย ใครข้ามก่อนได้อันดับก่อน · สรุป 1-2-3 แล้วล้างอันดับเริ่มรอบใหม่ (บันทึกทุกรอบ) · เปลี่ยนเวลาได้ที่ปุ่ม ⏱️ เวลาต่อรอบ</td></tr>
-    <tr><td>เคาะจอ</td><td>Survival / ทีมชาติ: ทุกไลก์ได้แรงเพิ่ม · ครบ ${LIKE_LEAD} ครั้ง = ลุ้นขึ้นนำ ${Math.round(LIKE_LEAD_CHANCE * 100)}% · แฟร์เกม: ครบ ${LIKE_LEAD} = เร่ง ${FAIR_BOOST_S} วิ · กลั่นแกล้ง: ครบ ${LIKE_LEAD} = ปากล้วยใส่คนข้างหน้า</td></tr>
-  </table>
-  <div class="row">📊 สถิติรอบที่ผ่านมา:</div>
-  <div id="admHist" class="stat">กำลังโหลด...</div>` : ''}
+  ${sec('🔗', 'ลิงก์ & หน้าอื่นๆ', `
+  <div class="row" style="opacity:.75">กดแล้วคัดลอกลิงก์ไปวางได้เลย · ลิงก์ขึ้นกับว่าเปิดแผงนี้จากที่ไหน (${adminEsc(location.origin)})${/localhost|127\.0\.0\.1/.test(location.host) ? ' — ลิงก์ public ต้องเปิดผ่าน cloudflared แล้วเปิดแผงจากลิงก์นั้น' : ''}</div>
+  <div class="grid">${copyBtn('/', 'ลิงก์หน้าเกม')}${copyBtn('/admin', 'ลิงก์แผงผู้ดูแล')}${copyBtn('/monitor', 'ลิงก์ Monitor')}${copyBtn('/eventlog', 'ลิงก์ Log TikTok')}${copyBtn('/followers', 'ลิงก์ผู้ติดตาม')}</div>
+  <div class="grid">${btn('monitor', '', '📈 ประสิทธิภาพเครื่อง (หน้าใหม่)')}${btn('eventlog', '', '📜 Log เหตุการณ์ TikTok (หน้าใหม่)')}${btn('followers', '', '👥 รายชื่อผู้ติดตาม (หน้าใหม่)')}</div>`, true)}
 
-  <h4>📱 ปุ่มบนจอเกม</h4>
-  <table>
-    <tr><td>🎁</td><td>เปิดแผงของขวัญ: เลือกนักปั่น 1-6 แล้วกดของขวัญเพื่อส่งเอง (ทดสอบเหมือนผู้ชมส่ง)</td></tr>
-    <tr><td>📷</td><td>เปลี่ยนโหมดกล้อง (วนตามลำดับ) — โหมด "ถ่ายทอดสด" จะสุ่มสลับมุมเอง</td></tr>
-    <tr><td>🎵 / 🗣️</td><td>(ในแผงของขวัญ) เปิด-ปิดเพลงประกอบ / เสียงพูดของบอท</td></tr>
-    <tr><td>แตะจอ</td><td>เปิดเสียง (เบราว์เซอร์ต้องให้แตะก่อน 1 ครั้ง) / เล่นต่อเมื่อหยุดไว้</td></tr>
-    <tr><td>ℹ️</td><td>เปิดแผงนี้เป็นหน้าใหม่ (http://localhost:3000/admin) สั่งเกมได้ทุกหน้า รวมถึงลิงก์ใน LIVE Studio</td></tr>
-  </table>
-
-  <h4>🎮 สั่งทดสอบ</h4>
-  <div class="row">ให้ท่ากับ: <select id="admTarget">${CHAR_NAMES.map((n, i) => `<option value="${i}">${i + 1}. ${adminEsc(n)}</option>`).join('')}</select></div>
-  <div class="grid">${Object.entries(ACTIONS).map(([k, a]) => btn('action', k, `${a.icon} ${a.name}`)).join('')}${btn('cheat', '', '😈 บอทโกงทันที')}</div>
-  <div class="grid">${btn('regroup', '', '🧲 รวมกลุ่ม (ผู้นำชะลอ · ผู้ตามท้ายเร่งมาจับกลุ่ม)')}</div>
-  <div class="row">🫂 จับกลุ่มอัตโนมัติ (ไม่ให้ทิ้งห่างกันมาก):</div>
-  <div class="grid">${Object.entries(COHESION).map(([k, c]) => btn('cohesion', k, c.name)).join('')}</div>
-  <div class="row" style="opacity:.75">☑️ หมวดที่มี 🎲 เลือกได้หลายอย่าง: กดเพื่อเพิ่ม/เอาออก · เลือก 1 = ล็อก · หลายอย่าง = สุ่มสลับเฉพาะที่เลือก · 🎲 = ล้าง สุ่มทั้งหมด · ทุกคำสั่งหน่วง ${CMD_DELAY} วิ แล้วค่อยๆ เปลี่ยน</div>
-  <div class="row">เส้นทาง:</div>
-  <div class="grid">${Object.entries(TRACK_MODES).map(([k, n]) => btn('track', k, n)).join('')}</div>
-  <div class="row">ระดับทาง ☑️ (เลือกได้หลายแบบ):</div>
-  <div class="grid">${rnd('terrain')}${Object.entries(TERRAINS).map(([k, t]) => btn('terrain', k, `${t.icon} ${t.name}`)).join('')}</div>
-  <div class="row">พื้นผิว ☑️:</div>
-  <div class="grid">${rnd('surface')}${Object.entries(SURFACES).map(([k, t]) => btn('surface', k, k === 'normal' ? '🛣️ ปกติ' : `${t.icon} ${t.name}`)).join('')}</div>
-  <div class="row">จำนวนเลน ☑️:</div>
-  <div class="grid">${rnd('lanes')}${Object.entries(WIDTHS).map(([k, t]) => btn('lanes', k, t.name)).join('')}</div>
-  <div class="row">ฉาก ☑️ (หลายฉาก = สลับเฉพาะที่เลือกทุก 5 นาที):</div>
-  <div class="grid">${rnd('scene')}${SCENE_IDS.map(id => btn('scene', id, `${SCENES[id].icon} ${SCENES[id].name}`)).join('')}</div>
-  <div class="row">อากาศ ☑️:</div>
-  <div class="grid">${rnd('weather')}${Object.entries(WEATHERS).map(([id, w]) => btn('weather', id, `${w.icon} ${w.name}`)).join('')}</div>
-  <div class="row">ความยาก ☑️:</div>
-  <div class="grid">${rnd('diff')}${DIFFS.map((d, i) => btn('diff', i, d.name)).join('')}</div>
-  <div class="row">มุมกล้อง ☑️ (หลายมุม = สลับเฉพาะมุมที่เลือก):</div>
-  <div class="grid">${CAM_MODES.map(m => m === 'broadcast' ? `<button data-k="cam" data-v="broadcast" class="rnd">🎲 สุ่มอัตโนมัติ (ถ่ายทอดสด)</button>` : btn('cam', m, CAM_NAMES[m])).join('')}</div>
-  <div class="row">🎬 สไตล์กล้อง (ความถี่การตัดสลับมุม):</div>
-  <div class="grid">${Object.entries(CAM_STYLES).map(([k, c]) => btn('camstyle', k, `${c.icon} ${c.name}`)).join('')}</div>
-  <div class="row">แบบมุมสูง (Top view) ☑️:</div>
-  <div class="grid">${rnd('topkind')}${Object.entries(TOP_KINDS).map(([k, n]) => btn('topkind', k, '🚁 ' + n)).join('')}</div>
-  <div class="row">นักปั่นกลุ่มใหญ่ (เพิ่มจาก 6 คนหลัก):</div>
-  <div class="grid">${[0, 6, 12, 20, 30].map(n => btn('pack', n, n ? `👥 ${n} คน` : '👤 ไม่มี')).join('')}</div>
-  <div class="row">🌗 ช่วงเวลา (ฟ้าค่อยๆ เปลี่ยน · กลางวัน/กลางคืน = ค้างไว้ตลอด):</div>
-  <div class="grid">${Object.entries(TIME_MODES).map(([k, t]) => btn('tmode', k, `${t.icon} ${t.name}${t.hour !== undefined ? ` (${t.hour}:00)` : ''}`)).join('')}</div>
-  <div class="grid">${btn('hour', -1, '🕐 เวลา -1 ชม.')}${btn('hour', 1, '🕐 เวลา +1 ชม.')}${btn('space', '', '🚀 สุ่มด่านอวกาศ')}${btn('pause', '', '⏸ หยุด/เล่น')}${btn('music', '', '🎵 เพลง')}${btn('voice', '', '🗣️ เสียงพูด')}${btn('gifts', '', '🎁 แผงของขวัญ')}</div>
-  <h4>🎙️ ผู้ประกาศ & พากย์</h4>
-  <div class="grid">${btn('ann', '', '📢 ประกาศเหตุการณ์ (ติดตาม/ของขวัญ/แชร์/คนเข้า)')}${btn('annchat', '', '💬 อ่านคอมเมนต์')}${btn('comm', '', '🏁 พากย์การแข่งอัตโนมัติ')}${btn('anntest', '', '🔊 ทดสอบเสียง')}</div>
-  <div class="grid">${btn('vgender', 'f', '👩 เสียงผู้หญิง')}${btn('vgender', 'm', '👨 เสียงผู้ชาย')}</div>
-  <div class="row" style="opacity:.75">ใช้เสียงภาษาไทยของเครื่อง${PANEL ? '' : ` · เครื่องนี้มีเสียงไทย ${thaiVoices().length} เสียง${thaiVoices().length ? ': ' + adminEsc(thaiVoices().map(v => v.name).join(', ')) : ' (ไม่มี — ติดตั้ง Thai ใน Windows Settings › Time & language › Speech)'}`} · มีเสียงไทยเสียงเดียว → ปรับเสียงสูง/ต่ำแทน</div>
-  <div class="vol">🔊 เสียงเอฟเฟกต์ <input type="range" class="sfxVol" min="0" max="100" step="5" value="${Math.round(SFX_VOL * 100)}"> <b class="sfxVolTxt">${SFX_VOL > 0 ? Math.round(SFX_VOL * 100) + '%' : 'ปิด'}</b></div>
-  <div class="vol">🌧️ เสียงฝน/ลม <input type="range" class="envVol" min="0" max="100" step="5" value="${Math.round(ENV_VOL * 100)}"> <b class="envVolTxt">${ENV_VOL > 0 ? Math.round(ENV_VOL * 100) + '%' : 'ปิด'}</b></div>
-  <div class="vol">🎨 สีฉากพื้นหลัง (จาง ↔ เข้ม) <input type="range" class="bgTone" min="0" max="100" step="5" value="${BGTONE}"> <b class="bgToneTxt">${toneLabel(BGTONE)}</b></div>
-  <div class="row" style="opacity:.75">ปรับเฉพาะฉาก/ถนน/ของข้างทาง · สีนักปั่นไม่เปลี่ยน — ฉากจางลง = นักปั่นเด่นขึ้น ไม่กลืนกับพื้นหลัง</div>
-
-  <h4>⌨️ คีย์ลัด (คีย์บอร์ด)</h4>
-  <table>
-    <tr><td>P / Esc</td><td>หยุด-เล่นต่อ</td></tr>
-    <tr><td>B</td><td>เปลี่ยนมุมกล้อง</td></tr>
-    <tr><td>G</td><td>แผงของขวัญ</td></tr>
-    <tr><td>I</td><td>แผงผู้ดูแลนี้</td></tr>
-    <tr><td>M / V</td><td>เพลง / เสียงพูด</td></tr>
-    <tr><td>1 / 2 / 3 / 4</td><td>ฉากถัดไป / อากาศถัดไป / เวลา +1 ชม. / ความยากถัดไป</td></tr>
-    <tr><td>J C H D X</td><td>กระโดด / ก้มหมอบ / ยกล้อหน้า / สไลด์ล้อหลัง / ล้ม</td></tr>
-    <tr><td>T K U Y</td><td>ปาของ / แกล้งผู้นำ / เทอร์โบ / บินสู่อวกาศ</td></tr>
-    <tr><td>O</td><td>ให้บอทโกงทันที</td></tr>
-  </table>
-
-  <h4>📡 TikTok Live</h4>
+  ${sec('📡', 'TikTok Live', `
   <div class="tk">
     <input id="admTk" type="text" placeholder="ชื่อผู้ใช้ TikTok หรือวางลิงก์ tiktok.com/@..." value="${adminEsc(S.live.username || '')}" autocomplete="off" spellcheck="false">
     <div class="grid">${btn('tkconnect', '', '🔗 เชื่อมไลฟ์')}${btn('tkstop', '', '⛔ ตัดการเชื่อม')}</div>
     <div id="admTkStat" class="tkstat"></div>
   </div>
-  <table>
-    <tr><td>เชื่อมไลฟ์</td><td>ใส่ชื่อบัญชีแล้วกด 🔗 เชื่อมไลฟ์ (ระบบจำชื่อไว้ให้ครั้งหน้า) จากนั้นกด Go LIVE ใน TikTok — เชื่อมติดเองเมื่อไลฟ์เริ่ม</td></tr>
+  <div class="row" style="opacity:.75">ใส่ชื่อบัญชีแล้วกด 🔗 (ระบบจำชื่อไว้) แล้วกด Go LIVE ใน TikTok — เชื่อมติดเองเมื่อไลฟ์เริ่ม</div>`, true)}
+
+  ${sec('🏁', 'การแข่ง', `
+  <div class="grid">${btn('mode', 'race', '🏁 แข่งผู้ติดตาม')}${btn('mode', 'sim', '🎮 จำลองการเล่น')}</div>
+  <div class="grid one">${btn('reset', '', '🔄 เริ่มเกมใหม่ (ทุกคนกลับเส้นสตาร์ต · นับเวลาใหม่ · ไม่บันทึกผล)')}</div>
+  ${race ? `
+  <div class="row">แบบการแข่ง (เปลี่ยนแล้วเริ่มรอบใหม่):</div>
+  <div class="grid">${Object.entries(RACE_TYPES).map(([k, t]) => btn('rtype', k, `${t.icon} ${t.name}`)).join('')}</div>
+  <div class="row" style="opacity:.75">${Object.values(RACE_TYPES).map(t => `${t.icon} <b>${t.name}</b>: ${t.tip}`).join('<br>')}</div>
+  <div class="row">⏱️ เวลาต่อรอบ (ค่าเริ่มต้น 15 นาที · ใช้กับรอบนี้ทันที):</div>
+  <div class="grid">${['15', '30', '45', '60'].map(v => btn('rmin', v, `⏱️ ${v} นาที`)).join('')}</div>
+  <div class="row">🙋 ผู้จัด / เจ้าของช่อง (เปิดเกมทุกครั้ง = ไม่ลงแข่ง):</div>
+  <div class="grid">${btn('host', 'out', '🪑 ผู้จัดไม่ลงแข่ง')}${btn('host', 'in', '🙋 ผู้จัดลงแข่ง')}</div>
+  <div class="row">🤖 จำนวนบอท ${RACE_TYPES[RTYPE].icon} ${RACE_TYPES[RTYPE].name}${RTYPE === 'nation' ? ' (ต่อชาติ สูงสุด 4)' : ''} — ตอนนี้ ${botLabel(RTYPE)}:</div>
+  <div class="grid">${BOT_CHOICES.filter(k => RTYPE !== 'nation' || +k <= 4).map(k => btn('bots', k, k === '0' ? '0 ไม่มีบอท' : k)).join('')}${btn('bots', 'def', `↩️ ค่าเริ่มต้น (${BOT_DEFAULT[RTYPE]})`)}</div>
+  <div class="row" style="opacity:.75">ค่าเริ่มต้น: แข่งปกติ 3 · ทีมชาติ ชาติละ 3 (💪เก่ง 🧠ฉลาด 🤸หลบหลีก · สุ่ม 6 ชาติ) · Survival 6 (สำรอง) · แฟร์เกม 4 · กลั่นแกล้ง 8 · บอทแบบอื่นสุ่มนิสัย เก่ง/ฉลาด/หลบหลีก/ปกติ/🤪โง่</div>` : ''}
+  <div class="vol">🏎️ ความเร็วการแข่ง <input type="range" class="rSpd" min="0" max="100" step="5" value="${RSPD.goal}"> <b class="rSpdTxt">${rspdLabel(RSPD.goal)}</b></div>
+  <div class="row" style="opacity:.75">ใช้กับทุกคน · ค่อยๆ เปลี่ยนราว 2 วิ · 75% = ปกติ (ค่าเริ่มต้น) · 100% = เร็วขึ้น · 0% = หยุดทั้งสนาม</div>
+  <div class="grid one">${btn('regroup', '', '🧲 รวมกลุ่มตอนนี้ (ผู้นำชะลอ · ผู้ตามท้ายเร่ง)')}</div>
+  <div class="row">🫂 จับกลุ่มอัตโนมัติ (ไม่ให้ทิ้งห่างกันมาก):</div>
+  <div class="grid">${Object.entries(COHESION).map(([k, c]) => btn('cohesion', k, c.name)).join('')}</div>
+  <div class="row">👥 นักปั่นตัวประกอบ (กลุ่มใหญ่ด้านหลัง ไม่ติดอันดับ):</div>
+  <div class="grid">${[0, 6, 12, 20, 30].map(n => btn('pack', n, n ? `👥 ${n} คน` : '👤 ไม่มี')).join('')}</div>
+  ${race ? `<div class="grid one">${btn('flist', '', '📋 แสดงผู้ติดตามล่าสุด 10 ชื่อบนจอ')}</div>
+  <div class="row">📊 สถิติรอบที่ผ่านมา:</div>
+  <div id="admHist" class="stat">กำลังโหลด...</div>` : ''}`, true)}
+
+  ${sec('👕', 'หน้าตา & ภาพบนจอ', `
+  <div class="row">ชุดนักปั่น + จักรยาน (สุ่มหญิง/ชาย สีผิว ทรงผม สีจักรยาน ต่อคน):</div>
+  <div class="grid">${Object.entries(OUTFIT_STYLES).map(([k, o]) => btn('outfit', k, `${o.icon} ${o.name}`)).join('')}</div>
+  <div class="row">🔍 ความคมภาพ (ภาพไลฟ์เบลอ → เพิ่ม · เครื่องกระตุก → ลด):</div>
+  <div class="grid">${['1', '1.5', '2', '2.5'].map(k => btn('sharp', k, `${SHARP_LEVELS[k]} ${k}x`)).join('')}</div>
+  <div class="row">🔤 ขนาดตัวหนังสือบนจอ:</div>
+  <div class="grid">${Object.entries(FONT_SIZES).map(([k, f]) => btn('fontsz', k, `${k === 's' ? '🔡' : k === 'l' ? '🔠' : '🔤'} ${f.name}`)).join('')}</div>
+  <div class="grid one">${btn('fitwin', '', '📐 ปรับหน้าต่างเกมเต็มจอ 9:16 (ไม่มีขอบดำซ้าย/ขวาในไลฟ์)')}</div>
+  <div class="grid">${btn('gifts', '', '🎁 แสดงแผงของขวัญบนจอ')}</div>
+  <div class="vol">🎨 สีฉากพื้นหลัง (จาง ↔ เข้ม) <input type="range" class="bgTone" min="0" max="100" step="5" value="${BGTONE}"> <b class="bgToneTxt">${toneLabel(BGTONE)}</b></div>
+  <div class="row" style="opacity:.75">ปรับเฉพาะฉาก/ถนน/ของข้างทาง · ฉากจางลง = นักปั่นเด่นขึ้น</div>`)}
+
+  ${sec('📷', 'กล้อง', `
+  <div class="row">มุมกล้อง ☑️ (หลายมุม = สลับเฉพาะมุมที่เลือก):</div>
+  <div class="grid">${CAM_MODES.map(m => m === 'broadcast' ? `<button data-k="cam" data-v="broadcast" class="rnd">🎲 สุ่มอัตโนมัติ (ถ่ายทอดสด)</button>` : btn('cam', m, CAM_NAMES[m])).join('')}</div>
+  <div class="row">🎬 สไตล์กล้อง (ความถี่การตัดสลับมุม):</div>
+  <div class="grid">${Object.entries(CAM_STYLES).map(([k, c]) => btn('camstyle', k, `${c.icon} ${c.name}`)).join('')}</div>
+  <div class="row">แบบมุมสูง (Top view) ☑️ — ใช้เมื่อมีมุมสูงในรายการกล้อง:</div>
+  <div class="grid">${rnd('topkind')}${Object.entries(TOP_KINDS).map(([k, n]) => btn('topkind', k, '🚁 ' + n)).join('')}</div>`)}
+
+  ${sec('🌍', 'ฉาก เส้นทาง อากาศ เวลา', `
+  <div class="row" style="opacity:.75">☑️ เลือกได้หลายอย่าง: กดเพิ่ม/เอาออก · เลือก 1 = ล็อก · หลายอย่าง = สุ่มเฉพาะที่เลือก · 🎲 = สุ่มทั้งหมด · ทุกคำสั่งหน่วง ${CMD_DELAY} วิ แล้วค่อยๆ เปลี่ยน</div>
+  <div class="row">ฉาก ☑️ (หลายฉาก = สลับทุก 5 นาที · ของขวัญเปลี่ยนฉากก็สุ่มเฉพาะที่เลือก):</div>
+  <div class="grid">${rnd('scene')}${SCENE_IDS.map(id => btn('scene', id, `${SCENES[id].icon} ${SCENES[id].name}`)).join('')}</div>
+  <div class="row">อากาศ ☑️ (เอฟเฟกต์เหลือ 30%):</div>
+  <div class="grid">${rnd('weather')}${Object.entries(WEATHERS).map(([id, w]) => btn('weather', id, `${w.icon} ${w.name}`)).join('')}</div>
+  <div class="row">🌗 ช่วงเวลา (กลางวัน/กลางคืน = ค้างไว้ · กด ±1 ชม. = ปลดล็อกเป็นเวลาจริงที่เลื่อนแล้ว):</div>
+  <div class="grid">${Object.entries(TIME_MODES).map(([k, t]) => btn('tmode', k, `${t.icon} ${t.name}${t.hour !== undefined ? ` (${t.hour}:00)` : ''}`)).join('')}</div>
+  <div class="grid">${btn('hour', -1, '🕐 เวลา -1 ชม.')}${btn('hour', 1, '🕐 เวลา +1 ชม.')}</div>
+  <div class="row">เส้นทาง:</div>
+  <div class="grid">${Object.entries(TRACK_MODES).map(([k, n]) => btn('track', k, n)).join('')}</div>
+  <div class="row">ระดับทาง ☑️:</div>
+  <div class="grid">${rnd('terrain')}${Object.entries(TERRAINS).map(([k, t]) => btn('terrain', k, `${t.icon} ${t.name}`)).join('')}</div>
+  <div class="row">พื้นผิว ☑️:</div>
+  <div class="grid">${rnd('surface')}${Object.entries(SURFACES).map(([k, t]) => btn('surface', k, k === 'normal' ? '🛣️ ปกติ' : `${t.icon} ${t.name}`)).join('')}</div>
+  <div class="row">จำนวนเลน ☑️:</div>
+  <div class="grid">${rnd('lanes')}${Object.entries(WIDTHS).map(([k, t]) => btn('lanes', k, t.name)).join('')}</div>
+  <div class="row">ความยาก (สิ่งกีดขวางบนทาง) ☑️:</div>
+  <div class="grid">${rnd('diff')}${DIFFS.map((d, i) => btn('diff', i, d.name)).join('')}</div>
+  <div class="grid one">${btn('space', '', '🚀 สุ่มด่านอวกาศ (เปิด/ปิด)')}</div>`)}
+
+  ${sec('🔊', 'เสียง & ผู้ประกาศ', `
+  <div class="grid">${btn('music', '', '🎵 เพลงประกอบ')}${btn('voice', '', '🗣️ เสียงบ่นของนักปั่น')}</div>
+  <div class="row">🎙️ ผู้ประกาศ (อ่านออกเสียงภาษาไทย):</div>
+  <div class="grid">${btn('ann', '', '📢 ประกาศเหตุการณ์ (ติดตาม/ของขวัญ/แชร์/คนเข้า)')}${btn('annchat', '', '💬 อ่านคอมเมนต์')}${btn('comm', '', '🏁 พากย์การแข่งอัตโนมัติ')}${btn('anntest', '', '🔊 ทดสอบเสียง')}</div>
+  <div class="grid">${btn('vgender', 'f', '👩 เสียงผู้หญิง')}${btn('vgender', 'm', '👨 เสียงผู้ชาย')}</div>
+  <div class="row" style="opacity:.75">ใช้เสียงไทยของเครื่อง${PANEL ? '' : ` · เครื่องนี้มี ${thaiVoices().length} เสียง${thaiVoices().length ? ': ' + adminEsc(thaiVoices().map(v => v.name).join(', ')) : ' (ไม่มี — ติดตั้ง Thai ใน Windows Settings › Time & language › Speech)'}`} · มีเสียงเดียว → ปรับสูง/ต่ำแทน · ผู้ประกาศพูดอยู่ นักปั่นจะไม่บ่นแทรก</div>
+  <div class="vol">🔊 เสียงเอฟเฟกต์ <input type="range" class="sfxVol" min="0" max="100" step="5" value="${Math.round(SFX_VOL * 100)}"> <b class="sfxVolTxt">${SFX_VOL > 0 ? Math.round(SFX_VOL * 100) + '%' : 'ปิด'}</b></div>
+  <div class="vol">🌧️ เสียงฝน/ลม <input type="range" class="envVol" min="0" max="100" step="5" value="${Math.round(ENV_VOL * 100)}"> <b class="envVolTxt">${ENV_VOL > 0 ? Math.round(ENV_VOL * 100) + '%' : 'ปิด'}</b></div>`)}
+
+  ${sec('🧪', 'ทดสอบ (ไม่ต้องไลฟ์)', `
+  ${race ? `
+  <div class="row">จำลองเหตุการณ์โหมดแข่ง:</div>
+  <div class="grid">${btn('rfollow', '', '➕ จำลองคนกดติดตาม')}${btn('rjoin', '', '👋 คนติดตามอยู่แล้วเข้าห้อง')}${btn('rlike', '', '❤️ ผู้ติดตามเคาะจอรัว 20 ครั้ง')}${Object.entries(RACE_CAT).map(([k, c]) => btn('rgift', k, `${c.icon} ของขวัญ${c.name}`)).join('')}${btn('rbig', '', '🌌 ผู้ติดตามส่ง 1000💎')}${btn('rend', '', '⏭️ จบรอบทันที')}${btn('rclear', '', '🧹 ล้างผู้ติดตาม')}</div>` : `
+  <div class="row">ให้ท่ากับ (โหมดจำลอง): <select id="admTarget">${CHAR_NAMES.map((n, i) => `<option value="${i}">${i + 1}. ${adminEsc(n)}</option>`).join('')}</select></div>`}
+  <div class="row">ท่า/เอฟเฟกต์ทันที:</div>
+  <div class="grid">${Object.entries(ACTIONS).map(([k, a]) => btn('action', k, `${a.icon} ${a.name}`)).join('')}${RTYPE === 'fair' && race ? '' : btn('cheat', '', '😈 บอทโกงทันที')}</div>`)}
+
+  ${sec('📖', 'คู่มือ & ตาราง', `
+  ${race ? `<table>
+    <tr><td>กดติดตาม</td><td>ได้นักปั่นของตัวเอง ชื่อ + รูปโปรไฟล์บนหัว (สูงสุด ${RACE.maxRiders} คนรวมบอท)</td></tr>
+    <tr><td>ของขวัญ</td><td>ผู้ส่งพุ่งนำตามราคา + ผลตามประเภท (แฟร์เกม/กลั่นแกล้งใช้กติกาของโหมดนั้น) · แก้ได้ที่ "raceGifts" ใน config.json</td></tr>
+    ${(RACE.tiers && RACE.tiers.length ? RACE.tiers : DEFAULT_RACE_TIERS).slice().sort((a, b) => a.min - b.min).map(t => `<tr><td>💎 ${t.min}+</td><td>${RACE_CAT[t.cat] ? RACE_CAT[t.cat].icon + ' ' + RACE_CAT[t.cat].name + ' — ' + RACE_CAT[t.cat].tip : adminEsc(t.cat)}</td></tr>`).join('')}
+    <tr><td>รอบ</td><td>${Math.round((RACE.stage ? RACE.stage.durationMs : 900000) / 60000)} นาที · 40 วิสุดท้ายมีเส้นชัย · สรุป 1-2-3 แล้วเริ่มรอบใหม่ (บันทึกทุกรอบ)</td></tr>
+    <tr><td>เคาะจอ</td><td>Survival / ทีมชาติ: ครบ ${LIKE_LEAD} ครั้ง = ลุ้นขึ้นนำ ${Math.round(LIKE_LEAD_CHANCE * 100)}% · แฟร์เกม: ครบ ${LIKE_LEAD} = เร่ง ${FAIR_BOOST_S} วิ · กลั่นแกล้ง: ครบ ${LIKE_LEAD} = ปาเปลือกกล้วย · ไลก์รวมครบ ${cfg ? cfg.likesPerJump : 100} = ทุกคนได้แรงเชียร์</td></tr>
+  </table>` : `<table>
     <tr><td>แชท 1-6</td><td>ผู้ชมเลือกเชียร์นักปั่น (1 คุณ, 2 สมชาย, 3 มานี, 4 ปิติ, 5 ชูใจ, 6 วีระ) ของขวัญจะไปที่คนนั้น</td></tr>
     <tr><td>ไลก์</td><td>ครบ ${cfg ? cfg.likesPerJump : 100} ไลก์ = 🦘 กระโดด</td></tr>
   </table>
   <div class="row">ของขวัญ → ท่า (แก้ได้ใน config.json มีผลทันที):</div>
-  <table>${giftRows}${tierRows}</table>
+  <table>${giftRows}${tierRows}</table>`}
+  <div class="row">📱 ปุ่มบนจอเกม / ⌨️ คีย์ลัด:</div>
+  <table>
+    <tr><td>แตะจอ</td><td>เปิดเสียง (ต้องแตะ 1 ครั้ง) / เล่นต่อเมื่อหยุดไว้</td></tr>
+    <tr><td>ℹ️ / I</td><td>เปิดแผงนี้เป็นหน้าใหม่ สั่งเกมได้ทุกหน้า</td></tr>
+    <tr><td>P / Esc</td><td>หยุด-เล่นต่อ</td></tr>
+    <tr><td>B</td><td>เปลี่ยนมุมกล้อง</td></tr>
+    <tr><td>F</td><td>ปรับหน้าต่างเกม 9:16</td></tr>
+    <tr><td>G</td><td>แผงของขวัญ</td></tr>
+    <tr><td>M / V</td><td>เพลง / เสียงบ่นนักปั่น</td></tr>
+    <tr><td>1 / 2 / 3 / 4</td><td>ฉากถัดไป / อากาศถัดไป / เวลา +1 ชม. / ความยากถัดไป</td></tr>
+    <tr><td>J C H D X</td><td>กระโดด / ก้มหมอบ / ยกล้อหน้า / สไลด์ล้อหลัง / ล้ม</td></tr>
+    <tr><td>T K U Y</td><td>ปาของ / แกล้งผู้นำ / เทอร์โบ / บินสู่อวกาศ</td></tr>
+    <tr><td>O</td><td>ให้บอทโกงทันที</td></tr>
+  </table>`)}
 `;
   el.querySelectorAll('button[data-k]').forEach(b => b.addEventListener('click', () => {
     if (b.dataset.k === 'close') { if (PANEL) window.close(); } else adminAct(b.dataset.k, b.dataset.v);
+  }));
+  el.querySelectorAll('details.asec').forEach(d => d.addEventListener('toggle', () => {
+    ADMIN.secOpen[d.dataset.s] = d.open;
+    try { localStorage.setItem('mtb.adminSec', JSON.stringify(ADMIN.secOpen)); } catch (e) { /* ignore */ }
   }));
   ADMIN.statusEl = el.querySelector('#admStatus');
   updateAdminStatus(true);
@@ -5292,10 +5475,10 @@ function updateAdminStatus(force) {
     `🗺️ ฉาก: <b>${scene}</b> · เปลี่ยนใน ${fmtMS(SCENE_MS - th.ms % SCENE_MS)}`,
     `🌦️ อากาศ: <b>${WEATHERS[S.wCur].name}</b>${LOCK.weather ? ' 🔒' : ''} · ความยาก: <b>${DIFFS[S.diff].name}</b>${LOCK.diff !== null ? ' 🔒' : ''} · เส้นทาง: <b>${TRACK_MODES[TRACK_MODE]}</b>`,
     `📷 กล้อง: <b>${CAM_NAMES[CAM.mode]}</b> → ${shot}`,
-    `${MODE === 'race' ? `🏁 โหมดแข่ง · ด่าน ${RACE.stage ? RACE.stage.no : '-'} เหลือ ${fmtMS(Math.max(0, stageLeftMs() || 0))} · ` : '🎮 โหมดจำลอง · '}อันดับ ${S.rank}/${S.rivals.length + 1} · ${(S.speed * KMH).toFixed(0)} km/h · ${((S.position + PLAYER_Z) / SEG_L * M_PER_SEG / 1000).toFixed(2)} km`,
+    `${MODE === 'race' ? `🏁 โหมดแข่ง · ด่าน ${RACE.stage ? RACE.stage.no : '-'} เหลือ ${fmtMS(Math.max(0, stageLeftMs() || 0))} · ` : '🎮 โหมดจำลอง · '}${S.rank ? `อันดับ ${S.rank}/${S.rivals.length + 1}` : `🪑 ผู้จัดไม่ลงแข่ง · นักปั่น ${S.rivals.length} คน`} · ${OUTFIT_STYLES[OUTFIT].icon} ${OUTFIT_STYLES[OUTFIT].name} · ${(S.speed * KMH).toFixed(0)} km/h · ${((S.position + PLAYER_Z) / SEG_L * M_PER_SEG / 1000).toFixed(2)} km`,
     `🎵 เพลง ${S.musicOn ? 'เปิด' : 'ปิด'} · 🗣️ เสียงพูด ${S.voiceOn ? 'เปิด' : 'ปิด'}${THAI_VOICE ? '' : ' (เครื่องนี้ไม่มีเสียงไทย ใช้เสียงการ์ตูน)'} · ${S.paused ? '⏸ หยุดอยู่' : '▶ กำลังเล่น'}`,
-    `💎 ยอดเชียร์: ${CHAR_NAMES.map((n, i) => `${n} ${S.support[i]}`).join(' · ')}`,
-  ].join('<br>');
+    MODE === 'race' ? `🎙️ ผู้ประกาศ ${ANN.on ? 'เปิด' : 'ปิด'} · พากย์ ${ANN.comm ? 'เปิด' : 'ปิด'} · ${ANN.gender === 'm' ? '👨 ชาย' : '👩 หญิง'}` : `💎 ยอดเชียร์: ${CHAR_NAMES.map((n, i) => `${n} ${S.support[i]}`).join(' · ')}`,
+  ].filter(Boolean).join('<br>');
   const ts = ADMIN.el && ADMIN.el.querySelector('#admTkStat');
   if (ts) {
     const st = { connected: '🔴 LIVE เชื่อมแล้ว', connecting: '🟡 กำลังเชื่อม…', offline: '⚪ ยังไม่เจอไลฟ์ — กด Go LIVE ใน TikTok แล้วรอสักครู่ (ลองใหม่อัตโนมัติ)', off: '⚪ ยังไม่ได้เชื่อม' }[L.status] || L.status;

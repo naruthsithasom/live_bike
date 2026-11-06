@@ -172,6 +172,13 @@ body.panel-page #admin {
 #admin .ah { display: flex; justify-content: space-between; align-items: center; font-size: 16px; margin-bottom: 8px; }
 #admin .stat { background: rgba(255, 255, 255, 0.06); border-radius: 10px; padding: 8px 10px; }
 #admin h4 { margin: 16px 0 6px; font-size: 14px; color: #ffd54f; }
+/* หมวดหมู่แผงผู้ดูแล: กดหัวข้อเพื่อพับ/กาง */
+#admin details.asec { border-top: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 6px; }
+#admin details.asec > summary { cursor: pointer; list-style: none; }
+#admin details.asec > summary::-webkit-details-marker { display: none; }
+#admin details.asec > summary h4 { display: inline-block; margin: 12px 0 6px; }
+#admin details.asec > summary h4::after { content: ' ▾'; color: rgba(255, 255, 255, 0.4); }
+#admin details.asec:not([open]) > summary h4::after { content: ' ▸'; }
 #admin table { width: 100%; border-collapse: collapse; }
 #admin td { padding: 4px 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); vertical-align: top; }
 #admin td:first-child { white-space: nowrap; color: #80d8ff; }
