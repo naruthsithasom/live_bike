@@ -7,7 +7,7 @@
 
 // ---------------------------------------------------------------- setup
 // เวอร์ชันของไฟล์เกม — แก้โค้ดเมื่อไหร่ให้เปลี่ยนค่านี้ หน้า /admin จะเตือนถ้าหน้าเกมยังใช้ไฟล์เก่า (ยังไม่ได้กด F5)
-const GAME_BUILD = '2026-11-06.6';
+const GAME_BUILD = '2026-11-06.7';
 const W = 540, H = 960;
 const cv = document.getElementById('game');
 let ctx = cv.getContext('2d');
@@ -3104,6 +3104,36 @@ function drawSegment(s, env) {
 // ----------------------------------------------------------- sprites
 function tri(x1, y1, x2, y2, x3, y3, col) { poly([x1, y1, x2, y2, x3, y3], col); }
 const LIGHTS = [];
+// ครึ่งความกว้างของสิ่งปลูกสร้าง/ต้นไม้ (หน่วยโลก) ใช้ดันออกไม่ให้ทับถนน
+// (อุปสรรค เช่น สะพาน โคลน หิน อยู่ใน S.objects ไม่ได้ถูกดัน)
+function decoHalfW(d) {
+  const v = d.v;
+  switch (d.type) {
+    case 'pine': case 'snowpine': return (2200 + v * 1600) * 0.21;
+    case 'tree': return (1800 + v * 1200) * 0.4;
+    case 'sakura': return (1700 + v * 1000) * 0.42;
+    case 'bush': return (500 + v * 400) * 0.95;
+    case 'palm': return (2000 + v * 1200) * 0.22;   // เอนออกนอกถนน ใบด้านในยื่นแค่ ~0.2h
+    case 'rock': return 380 + v * 300;
+    case 'boulder': return 800 + v * 500;
+    case 'umbrella': return 800;
+    case 'fence': return 600;
+    case 'house': return (1400 + v * 600) * 0.6;
+    case 'building': return d.bw / 2;
+    case 'cactus': return (900 + v * 700) * 0.4;
+    case 'bench': return 350;
+    case 'fountain': return 450;
+    case 'thaihouse': return (1500 + v * 500) * 0.6;
+    case 'torii': return 1000;
+    case 'temple': return (2600 + v * 1200) * 0.55;
+    case 'hut': return (1100 + v * 400) * 0.6;
+    case 'redrock': return (900 + v * 900) * 0.6;
+    case 'stand': return 1300;
+    case 'scarecrow': return 350;
+    case 'flower': return 300;
+    default: return 120;   // เสา ไฟ ป้าย ธง คน: บาง
+  }
+}
 function drawDeco(d, x, y, k) {
   const v = d.v, snow = ENV.snow > 0.3;
   switch (d.type) {
@@ -3137,7 +3167,7 @@ function drawDeco(d, x, y, k) {
       break;
     }
     case 'palm': {
-      const h = (2000 + v * 1200) * k, dir = v < 0.5 ? -1 : 1;
+      const h = (2000 + v * 1200) * k, dir = d.lean || (v < 0.5 ? -1 : 1);   // เอนออกจากถนน
       ctx.strokeStyle = '#8d6e4c'; ctx.lineWidth = Math.max(1, h * 0.05); ctx.lineCap = 'round';
       const tx = x + dir * h * 0.18, ty = y - h;
       ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x - dir * h * 0.08, y - h * 0.5, tx, ty); ctx.stroke();
@@ -5015,7 +5045,11 @@ function renderWorld(env) {
     ctx.globalAlpha = clamp(s.fog * 1.3, 0, 1);
     const k = s.p1.scale * W / 2;
     if (k * 2400 > 1.2) for (const d of s.decos) {   // เล็กกว่า ~1 พิกเซล: ไม่ต้องวาด
-      const sx = s.p1.x + s.p1.w * d.off * MIR;
+      // ขอบในของสิ่งปลูกสร้างต้องอยู่นอกถนน+ขอบทาง (ไม่ว่าจะ 1-4 เลน)
+      const edge = s.p1.w * (1 + (s.scene.rumbleW || 0.1)) + 60 * k;
+      const dist = Math.max(s.p1.w * Math.abs(d.off), edge + (d.hw ??= decoHalfW(d)) * k);
+      d.lean = Math.sign(d.off) * MIR;
+      const sx = s.p1.x + d.lean * dist;
       if (sx < -W * 1.5 || sx > W * 2.5) continue;
       drawDeco(d, sx, s.p1.y, k);
     }
