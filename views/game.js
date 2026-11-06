@@ -7,7 +7,7 @@
 
 // ---------------------------------------------------------------- setup
 // เวอร์ชันของไฟล์เกม — แก้โค้ดเมื่อไหร่ให้เปลี่ยนค่านี้ หน้า /admin จะเตือนถ้าหน้าเกมยังใช้ไฟล์เก่า (ยังไม่ได้กด F5)
-const GAME_BUILD = '2026-11-06.13';
+const GAME_BUILD = '2026-11-06.14';
 const W = 540, H = 960;
 const cv = document.getElementById('game');
 let ctx = cv.getContext('2d');
@@ -1163,7 +1163,7 @@ function pol(s) { return s.replace(/\{k\}/g, ANN.gender === 'm' ? 'ครับ'
 function sayName(n) { const c = String(n || '').replace(/^@/, '').replace(/[^฀-๿a-zA-Z0-9 ._]/g, '').replace(/[._]+/g, ' ').trim().slice(0, 24); return c || 'คุณผู้ชม'; }
 function speechText(s) { return String(s).replace(/https?:\/\/\S+/g, '').replace(/[^฀-๿a-zA-Z0-9 !?.,%]/g, ' ').replace(/\s+/g, ' ').trim(); }
 function announce(kind, text) {
-  if (!text || typeof SpeechSynthesisUtterance !== 'function') return;
+  if (!text || (typeof SpeechSynthesisUtterance !== 'function' && !S.live.server)) return;
   const isComm = kind === 'comm' || kind === 'race' || kind === 'lead' || kind === 'win' || kind === 'tip';
   if (isComm ? !ANN.comm : !ANN.on) return;
   if (kind === 'chat' && !ANN.chat) return;
@@ -1183,7 +1183,27 @@ function annNext() {
   while (ANNQ.length && performance.now() - ANNQ[0].at > 20000) ANNQ.shift();   // ค้างนานเกิน → ข้าม
   if (!ANNQ.length) return;
   const sel = annVoice();
-  if (!sel) { ANNQ.length = 0; return; }
+  if (!sel) {
+    // เครื่องไม่มีเสียงไทย → ใช้เสียงไทยออนไลน์ผ่านเซิร์ฟเวอร์ (/tts) เล่นในหน้าต่างเกม (LIVE Studio จับเสียงไปไลฟ์ได้)
+    if (!S.live.server) { ANNQ.length = 0; return; }
+    const it = ANNQ.shift();
+    try {
+      const a = new Audio('/tts?q=' + encodeURIComponent(it.text.slice(0, 190)));
+      // เสียงออนไลน์มีแต่เสียงผู้หญิง → เสียงผู้ชาย = เล่นช้าลงให้เสียงต่ำ
+      if (ANN.gender === 'm') { a.preservesPitch = false; a.playbackRate = 0.84; } else a.playbackRate = 1.06;
+      a.volume = 1;
+      annBusy = true; annBusyUntil = performance.now() + 6000 + it.text.length * 200;
+      const done = () => { if (!annBusy) return; annBusy = false; setTimeout(annNext, 300); };
+      a.onended = done; a.onerror = done;
+      ANN.audio = a;
+      const pr = a.play();
+      if (pr && pr.catch) pr.catch(err => {
+        done();
+        if (err && err.name === 'NotAllowedError' && !ANN.warned) { ANN.warned = true; toast('🔇 แตะจอเกม 1 ครั้งเพื่อเปิดเสียงผู้ประกาศ', '#ffccbc'); }
+      });
+    } catch (e) { annBusy = false; }
+    return;
+  }
   const it = ANNQ.shift();
   try {   // เสียงพูดพัง ห้ามทำให้การรับของขวัญ/ผู้ติดตามพังตาม
     const u = new SpeechSynthesisUtterance(it.text);
@@ -5235,9 +5255,10 @@ function adminAct(kind, val, opt) {
       ANNQ.length = 0; announce('follow', `สวัสดี{k} นี่คือเสียง${ANN.gender === 'm' ? 'ผู้ชาย' : 'ผู้หญิง'}`); break;
     case 'anntest': {
       const was = ANN.on; ANN.on = true;
-      announce('follow', thaiVoices().length ? 'ทดสอบเสียงผู้ประกาศ ได้ยินชัดไหม{k}' : '');
+      ANNQ.length = 0;
+      announce('follow', 'ทดสอบเสียงผู้ประกาศ ได้ยินชัดไหม{k}');
       ANN.on = was;
-      if (!thaiVoices().length) toast('⚠️ เครื่องนี้ไม่มีเสียงภาษาไทย — ติดตั้งใน Windows Settings › Speech', '#ffccbc');
+      toast(thaiVoices().length ? '🔊 ทดสอบเสียง (เสียงไทยในเครื่อง)' : S.live.server ? '🔊 ทดสอบเสียง (เสียงไทยออนไลน์ — เครื่องนี้ไม่มีเสียงไทย)' : '⚠️ ไม่มีเสียงไทยในเครื่อง และไม่ได้ต่อเซิร์ฟเวอร์', '#e1f5fe');
       break;
     }
     case 'gifts': { const p = $id('giftPanel'); if (p) p.classList.toggle('hidden'); break; }
@@ -5398,7 +5419,7 @@ function renderAdmin() {
   <div class="row">🎙️ ผู้ประกาศ (อ่านออกเสียงภาษาไทย):</div>
   <div class="grid">${btn('ann', '', '📢 ประกาศเหตุการณ์ (ติดตาม/ของขวัญ/แชร์/คนเข้า)')}${btn('annchat', '', '💬 อ่านคอมเมนต์')}${btn('comm', '', '🏁 พากย์การแข่งอัตโนมัติ')}${btn('anntest', '', '🔊 ทดสอบเสียง')}</div>
   <div class="grid">${btn('vgender', 'f', '👩 เสียงผู้หญิง')}${btn('vgender', 'm', '👨 เสียงผู้ชาย')}</div>
-  <div class="row" style="opacity:.75">ใช้เสียงไทยของเครื่อง${PANEL ? '' : ` · เครื่องนี้มี ${thaiVoices().length} เสียง${thaiVoices().length ? ': ' + adminEsc(thaiVoices().map(v => v.name).join(', ')) : ' (ไม่มี — ติดตั้ง Thai ใน Windows Settings › Time & language › Speech)'}`} · มีเสียงเดียว → ปรับสูง/ต่ำแทน · ผู้ประกาศพูดอยู่ นักปั่นจะไม่บ่นแทรก</div>
+  <div class="row" style="opacity:.75">มีเสียงไทยในเครื่อง → ใช้เสียงเครื่อง · ไม่มี → ใช้เสียงไทยออนไลน์ (Google) ผ่านเซิร์ฟเวอร์ เล่นในหน้าต่างเกม · เสียงผู้ชาย = ปรับเสียงต่ำลง · ต้องแตะจอเกม 1 ครั้งก่อน (ถ้าไม่ได้เปิดด้วย start-game-chrome.bat) · ผู้ประกาศพูดอยู่ นักปั่นจะไม่บ่นแทรก</div>
   <div class="vol">🔊 เสียงเอฟเฟกต์ <input type="range" class="sfxVol" min="0" max="100" step="5" value="${Math.round(SFX_VOL * 100)}"> <b class="sfxVolTxt">${SFX_VOL > 0 ? Math.round(SFX_VOL * 100) + '%' : 'ปิด'}</b></div>
   <div class="vol">🌧️ เสียงฝน/ลม <input type="range" class="envVol" min="0" max="100" step="5" value="${Math.round(ENV_VOL * 100)}"> <b class="envVolTxt">${ENV_VOL > 0 ? Math.round(ENV_VOL * 100) + '%' : 'ปิด'}</b></div>`)}
 

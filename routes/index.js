@@ -12,6 +12,7 @@ const admin = require('../controllers/adminController');
 const stats = require('../controllers/statsController');
 const eventlog = require('../controllers/eventlogController');
 const authCtl = require('../controllers/authController');
+const tts = require('../controllers/ttsController');
 const page = require('../controllers/pageController');
 const auth = require('../lib/auth');
 const { json, text } = require('../lib/http');
@@ -52,6 +53,8 @@ const ROUTES = {
   'GET /eventlog/recent': eventlog.recent,
   'GET /eventlog/download': eventlog.download,
   'POST /eventlog/clear': eventlog.clear,
+  // เสียงพูดภาษาไทยออนไลน์ (ผู้ประกาศ เมื่อเครื่องไม่มีเสียงไทย)
+  'GET /tts': tts.speak,
 };
 const PUBLIC = new Set(['POST /login', 'POST /logout', 'GET /whoami', 'GET /events', 'GET /events/poll','GET /config', 'GET /gifts', 'GET /race', 'GET /race/history']);
 const GAME_WRITE = new Set(['POST /race/finish', 'POST /admin/state']);
