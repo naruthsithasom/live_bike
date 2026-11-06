@@ -7,7 +7,7 @@
 
 // ---------------------------------------------------------------- setup
 // เวอร์ชันของไฟล์เกม — แก้โค้ดเมื่อไหร่ให้เปลี่ยนค่านี้ หน้า /admin จะเตือนถ้าหน้าเกมยังใช้ไฟล์เก่า (ยังไม่ได้กด F5)
-const GAME_BUILD = '2026-11-06.14';
+const GAME_BUILD = '2026-11-06.15';
 const W = 540, H = 960;
 const cv = document.getElementById('game');
 let ctx = cv.getContext('2d');
@@ -1138,11 +1138,19 @@ function babble(n, pitch) {
 // อ่านออกเสียง (TTS ภาษาไทยของเครื่อง) เรียงคิวทีละประโยค ไม่พูดทับกัน · ประกาศเหตุการณ์ไลฟ์ (ติดตาม/ของขวัญ/แชร์/คอมเมนต์ ฯลฯ)
 // และพากย์การแข่งอัตโนมัติ · ตั้งค่าจากแผงผู้ดูแล จำไว้ใน localStorage 'mtb.ann'
 const ANN = (() => {
-  const d = { on: true, comm: true, chat: true, gender: 'f' };
+  const d = { on: true, comm: true, chat: true, gender: 'f', vol: 1 };
   try { const v = JSON.parse(localStorage.getItem('mtb.ann') || '{}'); for (const k in d) if (typeof v[k] === typeof d[k]) d[k] = v[k]; } catch (e) { /* ignore */ }
   return d;
 })();
-function saveAnn() { try { localStorage.setItem('mtb.ann', JSON.stringify(ANN)); } catch (e) { /* ignore */ } }
+function saveAnn() { try { localStorage.setItem('mtb.ann', JSON.stringify({ on: ANN.on, comm: ANN.comm, chat: ANN.chat, gender: ANN.gender, vol: ANN.vol })); } catch (e) { /* ignore */ } }
+// 🎙️ ระดับเสียงผู้ประกาศ 0-100% (สไลด์ในแผงผู้ดูแล) · เปลี่ยนเสียงที่กำลังพูดอยู่ทันที
+function setAnnVol(v) {
+  ANN.vol = clamp(v, 0, 1);
+  if (ANN.audio) ANN.audio.volume = ANN.vol;
+  if (ANN.vol === 0) { ANNQ.length = 0; try { if (ANN.audio) ANN.audio.pause(); speechSynthesis.cancel(); } catch (e) { /* ignore */ } annBusy = false; }
+  saveAnn();
+  volUI('ann', ANN.vol);
+}
 const ANNQ = [], ANN_LAST = {};
 let annBusy = false, annBusyUntil = 0;
 // เว้นระยะขั้นต่ำต่อชนิด (วินาที) กันพูดรัว · ลำดับความสำคัญ: สูง = พูดก่อน และไม่ถูกตัดทิ้งตอนคิวยาว
@@ -1166,6 +1174,7 @@ function announce(kind, text) {
   if (!text || (typeof SpeechSynthesisUtterance !== 'function' && !S.live.server)) return;
   const isComm = kind === 'comm' || kind === 'race' || kind === 'lead' || kind === 'win' || kind === 'tip';
   if (isComm ? !ANN.comm : !ANN.on) return;
+  if (!(ANN.vol > 0)) return;   // เลื่อนเสียงผู้ประกาศเป็น 0 = ไม่พูด
   if (kind === 'chat' && !ANN.chat) return;
   const gap = ANN_GAP[kind] || 0, p = ANN_PRIO[kind] ?? 1;
   if (gap && S.t - (ANN_LAST[kind] ?? -99) < gap) return;
@@ -1191,7 +1200,7 @@ function annNext() {
       const a = new Audio('/tts?q=' + encodeURIComponent(it.text.slice(0, 190)));
       // เสียงออนไลน์มีแต่เสียงผู้หญิง → เสียงผู้ชาย = เล่นช้าลงให้เสียงต่ำ
       if (ANN.gender === 'm') { a.preservesPitch = false; a.playbackRate = 0.84; } else a.playbackRate = 1.06;
-      a.volume = 1;
+      a.volume = ANN.vol;
       annBusy = true; annBusyUntil = performance.now() + 6000 + it.text.length * 200;
       const done = () => { if (!annBusy) return; annBusy = false; setTimeout(annNext, 300); };
       a.onended = done; a.onerror = done;
@@ -1207,7 +1216,7 @@ function annNext() {
   const it = ANNQ.shift();
   try {   // เสียงพูดพัง ห้ามทำให้การรับของขวัญ/ผู้ติดตามพังตาม
     const u = new SpeechSynthesisUtterance(it.text);
-    u.voice = sel.v; u.lang = sel.v.lang; u.pitch = annPitch(sel.exact); u.rate = 1.05; u.volume = 1;
+    u.voice = sel.v; u.lang = sel.v.lang; u.pitch = annPitch(sel.exact); u.rate = 1.05; u.volume = ANN.vol;
     annBusy = true; annBusyUntil = performance.now() + 4000 + it.text.length * 160;   // กันค้าง ถ้า onend ไม่มา
     const done = () => { if (!annBusy) return; annBusy = false; setTimeout(annNext, 300); };
     u.onend = done; u.onerror = done;
@@ -1216,6 +1225,14 @@ function annNext() {
   } catch (e) { annBusy = false; }
 }
 setInterval(() => { if (!PANEL) annNext(); }, 1000);
+// เสียงตัวอย่างหลังปรับระดับเสียง (พูดแม้ปิดประกาศไว้ ไม่พูดถ้าเลื่อนเป็น 0)
+function annSample() {
+  if (PANEL || !(ANN.vol > 0)) return;
+  const was = ANN.on; ANN.on = true;
+  ANNQ.length = 0; ANN_LAST.follow = -99;
+  announce('follow', `ระดับเสียงผู้ประกาศ ${Math.round(ANN.vol * 100)} เปอร์เซ็นต์{k}`);
+  ANN.on = was;
+}
 function speak(text, pitch, prio) {
   if (!S.voiceOn || !AC) return;
   if (annBusy || ANNQ.length) return;   // ผู้ประกาศพูดอยู่ → นักปั่นไม่พูดแทรก
@@ -4906,7 +4923,7 @@ const REMOTE = { on: new Set(), age: -1, mode: null, pend: new Map() };
 // กดปุ่มในหน้า /admin แล้วติดไฟทันที (เดาผลไว้ก่อน) ไม่ต้องรอหน้าเกมตอบกลับ — หน้าเกมยืนยันแล้วค่อยใช้ค่าจริง
 const PRED_SINGLE = new Set(['mode', 'track', 'cohesion', 'sharp', 'rtype', 'camstyle', 'pack', 'action', 'tmode', 'host', 'vgender', 'fontsz', 'rmin', 'outfit']);
 const PRED_TOGGLE = new Set(['space', 'pause', 'music', 'voice', 'flist', 'gifts', 'regroup', 'ann', 'annchat', 'comm']);
-const PRED_SKIP = new Set(['sfxvol', 'envvol', 'bgtone', 'rspd', 'close']);
+const PRED_SKIP = new Set(['sfxvol', 'envvol', 'annvol', 'bgtone', 'rspd', 'close']);
 function predictPanel(kind, val) {
   if (!ADMIN.el || PRED_SKIP.has(kind)) return;
   const P = REMOTE.pend, now = performance.now(), until = now + 6000, v = String(val == null ? '' : val);
@@ -4962,6 +4979,7 @@ function panelPoll() {
     const ts = $id('admTkStat'); if (ts && st.tk) ts.innerHTML = safeHtml(st.tk);
     const busy = document.activeElement && document.activeElement.type === 'range';
     if (!busy && typeof st.sfx === 'number') volUI('sfx', st.sfx);
+    if (!busy && typeof st.ann === 'number') volUI('ann', st.ann);
     if (!busy && typeof st.env === 'number') volUI('env', st.env);
     if (!busy && typeof st.tone === 'number') { BGTONE = st.tone; toneUI(st.tone); }
     if (!busy && typeof st.rspd === 'number') { RSPD.goal = st.rspd; rspdUI(st.rspd); }
@@ -4988,7 +5006,7 @@ function postAdminState(force) {
   ADMIN.el.querySelectorAll('button[data-k]').forEach(b => { if (adminActive(b.dataset.k, b.dataset.v)) on.push(b.dataset.k + '|' + b.dataset.v); });
   const ts = ADMIN.el.querySelector('#admTkStat');
   fetch('/admin/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-    on, mode: MODE, status: ADMIN.statusEl ? ADMIN.statusEl.innerHTML : '', tk: ts ? ts.innerHTML : '', sfx: SFX_VOL, env: ENV_VOL, tone: BGTONE, rspd: RSPD.goal, perf: perfReport(), build: GAME_BUILD, rtype: RTYPE, bots: BOTS,
+    on, mode: MODE, status: ADMIN.statusEl ? ADMIN.statusEl.innerHTML : '', tk: ts ? ts.innerHTML : '', sfx: SFX_VOL, env: ENV_VOL, ann: ANN.vol, tone: BGTONE, rspd: RSPD.goal, perf: perfReport(), build: GAME_BUILD, rtype: RTYPE, bots: BOTS,
   }) }).catch(() => {});
 }
 let volSendT = 0;
@@ -5008,6 +5026,12 @@ document.addEventListener('input', e => {
     else setBgTone(v);
     return;
   }
+  if (c && c.contains('annVol')) {   // 🎙️ เสียงผู้ประกาศ
+    volUI('ann', e.target.value / 100);
+    if (PANEL) { const now = performance.now(); if (now - volSendT > 160) { volSendT = now; panelSend('annvol', e.target.value); } }
+    else setAnnVol(e.target.value / 100);
+    return;
+  }
   if (!c || !(c.contains('sfxVol') || c.contains('envVol'))) return;
   if (PANEL) {   // ส่งไปหน้าเกม (ไม่เกิน 6 ครั้ง/วิ)
     const kind = c.contains('sfxVol') ? 'sfxvol' : 'envvol';
@@ -5024,6 +5048,7 @@ document.addEventListener('change', e => {
   const c = e.target.classList;
   if (c && c.contains('bgTone')) { if (PANEL) panelSend('bgtone', e.target.value); return; }
   if (c && c.contains('rSpd')) { if (PANEL) panelSend('rspd', e.target.value); return; }
+  if (c && c.contains('annVol')) { if (PANEL) panelSend('annvol', e.target.value); else annSample(); return; }
   if (!c || !(c.contains('sfxVol') || c.contains('envVol'))) return;
   if (PANEL) panelSend(c.contains('sfxVol') ? 'sfxvol' : 'envvol', e.target.value);
   else if (c.contains('sfxVol')) sfx.pick();
@@ -5241,6 +5266,12 @@ function adminAct(kind, val, opt) {
       break;
     }
     case 'sfxvol': setSfxVol((parseFloat(val) || 0) / 100); break;
+    case 'annvol': {
+      setAnnVol((parseFloat(val) || 0) / 100);
+      // หยุดเลื่อนแล้วพูดตัวอย่าง ให้รู้ว่าดังแค่ไหน
+      clearTimeout(ANN.sampleT); ANN.sampleT = setTimeout(annSample, 700);
+      break;
+    }
     case 'envvol': setEnvVol((parseFloat(val) || 0) / 100); break;
     case 'hour': hourShift(parseFloat(val)); toast(`⏳ เวลา ${parseFloat(val) > 0 ? '+' : ''}${val} ชม. (ฟ้าค่อยๆ เปลี่ยน)`, '#e1f5fe'); break;
     case 'pause': S.paused = !S.paused; break;
@@ -5419,6 +5450,7 @@ function renderAdmin() {
   <div class="row">🎙️ ผู้ประกาศ (อ่านออกเสียงภาษาไทย):</div>
   <div class="grid">${btn('ann', '', '📢 ประกาศเหตุการณ์ (ติดตาม/ของขวัญ/แชร์/คนเข้า)')}${btn('annchat', '', '💬 อ่านคอมเมนต์')}${btn('comm', '', '🏁 พากย์การแข่งอัตโนมัติ')}${btn('anntest', '', '🔊 ทดสอบเสียง')}</div>
   <div class="grid">${btn('vgender', 'f', '👩 เสียงผู้หญิง')}${btn('vgender', 'm', '👨 เสียงผู้ชาย')}</div>
+  <div class="vol">🎙️ เสียงผู้ประกาศ <input type="range" class="annVol" min="0" max="100" step="5" value="${Math.round(ANN.vol * 100)}"> <b class="annVolTxt">${ANN.vol > 0 ? Math.round(ANN.vol * 100) + '%' : 'ปิด'}</b></div>
   <div class="row" style="opacity:.75">มีเสียงไทยในเครื่อง → ใช้เสียงเครื่อง · ไม่มี → ใช้เสียงไทยออนไลน์ (Google) ผ่านเซิร์ฟเวอร์ เล่นในหน้าต่างเกม · เสียงผู้ชาย = ปรับเสียงต่ำลง · ต้องแตะจอเกม 1 ครั้งก่อน (ถ้าไม่ได้เปิดด้วย start-game-chrome.bat) · ผู้ประกาศพูดอยู่ นักปั่นจะไม่บ่นแทรก</div>
   <div class="vol">🔊 เสียงเอฟเฟกต์ <input type="range" class="sfxVol" min="0" max="100" step="5" value="${Math.round(SFX_VOL * 100)}"> <b class="sfxVolTxt">${SFX_VOL > 0 ? Math.round(SFX_VOL * 100) + '%' : 'ปิด'}</b></div>
   <div class="vol">🌧️ เสียงฝน/ลม <input type="range" class="envVol" min="0" max="100" step="5" value="${Math.round(ENV_VOL * 100)}"> <b class="envVolTxt">${ENV_VOL > 0 ? Math.round(ENV_VOL * 100) + '%' : 'ปิด'}</b></div>`)}
