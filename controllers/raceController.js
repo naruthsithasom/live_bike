@@ -1,5 +1,5 @@
 // Controller: โหมดแข่งผู้ติดตาม (ด่าน ผลด่าน รายชื่อ) + ปุ่มทดสอบเหตุการณ์
-const { config } = require('../config/index');
+const { config, saveKey } = require('../config/index');
 const { broadcast } = require('../lib/hub');
 const { json, readJson } = require('../lib/http');
 const raceModel = require('../models/race');
@@ -41,6 +41,21 @@ function restart(req, res) {
   json(res, { ok: true, stage: raceModel.stageInfo() });
 }
 
+// POST /race/minutes {minutes} — เปลี่ยนเวลาต่อรอบ (15/30/45/60) · รอบที่กำลังแข่งใช้เวลาใหม่ทันที (นับจากตอนเริ่มรอบเดิม)
+function setMinutes(req, res) {
+  readJson(req, j => {
+    const m = Number(j && j.minutes);
+    if (!raceModel.ROUND_CHOICES.includes(m)) return json(res, { ok: false, msg: 'เลือกได้ 15/30/45/60 นาที' });
+    if (m !== raceModel.roundMinutes()) {
+      config.roundMinutes = m;
+      saveKey('roundMinutes', m);
+      console.log(`⏱️ เวลาต่อรอบ ${m} นาที`);
+      broadcast({ type: 'stage', stage: raceModel.stageInfo() });
+    }
+    json(res, { ok: true, stage: raceModel.stageInfo() });
+  });
+}
+
 // POST /race/clear — ล้างรายชื่อผู้ติดตามในสนาม
 function clear(req, res) { raceModel.clearRoster(); json(res, { ok: true }); }
 
@@ -64,4 +79,4 @@ function testEvent(req, res) {
   });
 }
 
-module.exports = { state, finish, testFollow, restart, clear, history, testEvent };
+module.exports = { state, finish, testFollow, restart, setMinutes, clear, history, testEvent };

@@ -35,6 +35,7 @@ const ROUTES = {
   'POST /race/finish': race.finish,
   'POST /race/follow': race.testFollow,
   'POST /race/restart': race.restart,
+  'POST /race/minutes': race.setMinutes,
   'POST /race/clear': race.clear,
   'GET /race/history': race.history,
   'POST /test/event': race.testEvent,

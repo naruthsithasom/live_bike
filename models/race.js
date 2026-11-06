@@ -35,7 +35,10 @@ const race = { stageNo: 1, startedAt: Date.now(), roster: new Map() };
 const recentFollows = [];   // ผู้ติดตามล่าสุดในไลฟ์นี้ (ใหม่สุดก่อน)
 const donors = new Set();   // คนที่ส่งของขวัญในไลฟ์นี้ → แชทของคนนี้แสดงบนจอ
 
-function stageMs() { return Math.max(1, Number(config.stageMinutes) || 60) * 60000; }
+// ⏱️ เวลาต่อรอบ: เลือก 15/30/45/60 นาทีจากแผงผู้ดูแล (เก็บใน config.json → roundMinutes) · ค่าเริ่มต้น 15 นาที
+const ROUND_CHOICES = [15, 30, 45, 60];
+function roundMinutes() { const v = Number(config.roundMinutes); return ROUND_CHOICES.includes(v) ? v : 15; }
+function stageMs() { return roundMinutes() * 60000; }
 function stageInfo() { return { no: race.stageNo, startedAt: race.startedAt, durationMs: stageMs(), serverNow: Date.now() }; }
 function newStage() { race.stageNo++; race.startedAt = Date.now(); for (const f of race.roster.values()) f.diamonds = 0; broadcast({ type: 'stage', stage: stageInfo() }); }
 // เริ่มด่านเดิมใหม่ (ไม่บันทึกผล ไม่ขึ้นด่านใหม่) · รายชื่อผู้ติดตามยังอยู่
@@ -87,5 +90,5 @@ async function followersList(limit) {
 
 module.exports = {
   CHARS, teams, parseTeam, RACE_CATS, CAT_TH, tiers, category,
-  race, donors, stageInfo, newStage, restartStage, state, addFollower, joinIfFollower, clearRoster, followersList,
+  race, donors, stageInfo, newStage, restartStage, state, ROUND_CHOICES, roundMinutes, addFollower, joinIfFollower, clearRoster, followersList,
 };

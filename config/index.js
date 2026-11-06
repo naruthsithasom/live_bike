@@ -41,4 +41,13 @@ function saveUsername(name) {
   } catch (e) { console.warn('⚠️  บันทึกชื่อบัญชีลง config.json ไม่ได้:', e.message); }
 }
 
-module.exports = { config, saveUsername, ROOT };
+// บันทึกค่าตั้งค่าทั่วไปลง config.json (เช่น เวลาต่อรอบจากแผงผู้ดูแล)
+function saveKey(key, value) {
+  try {
+    const cur = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+    cur[key] = value;
+    fs.writeFileSync(FILE, JSON.stringify(cur, null, 2) + '\n');
+  } catch (e) { console.warn(`⚠️  บันทึก ${key} ลง config.json ไม่ได้:`, e.message); }
+}
+
+module.exports = { config, saveUsername, saveKey, ROOT };

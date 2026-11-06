@@ -7,7 +7,7 @@
 
 // ---------------------------------------------------------------- setup
 // เวอร์ชันของไฟล์เกม — แก้โค้ดเมื่อไหร่ให้เปลี่ยนค่านี้ หน้า /admin จะเตือนถ้าหน้าเกมยังใช้ไฟล์เก่า (ยังไม่ได้กด F5)
-const GAME_BUILD = '2026-11-06.11';
+const GAME_BUILD = '2026-11-06.12';
 const W = 540, H = 960;
 const cv = document.getElementById('game');
 let ctx = cv.getContext('2d');
@@ -1826,7 +1826,15 @@ function thinkEffort(o, stam, dt, near) {
   o.effT -= dt;
   if (o.tired) o.effTarget = 8;
   else if (stam < 25 && o.effTarget > 45) o.effTarget = 30;
-  else if (o.effT <= 0) {
+  else if (o.skill === 'clever' && o.bot && o.effT <= 0) {
+    // 🧠 ฉลาด: ไม่ปล่อยให้หมดแรง · ตามหลังคนข้างหน้าเพื่อกินลม แล้วค่อยเร่งแซงตอนแรงเหลือเยอะ
+    o.effT = 3 + Math.random() * 3;
+    o.effTarget = stam < 40 ? 50 : near && near.draft && stam < 75 ? 62 : near && near.ahead && stam > 60 ? 92 : 74;
+  } else if (o.skill === 'dumb' && o.bot && o.effT <= 0) {
+    // 🤪 โง่: ปั่นสุดแรงมั่วๆ ไม่ดูแรงที่เหลือ → หมดแรงบ่อย
+    o.effT = 2 + Math.random() * 4;
+    o.effTarget = Math.random() < 0.6 ? 90 + Math.random() * 10 : 30 + Math.random() * 30;
+  } else if (o.effT <= 0) {
     o.effT = 4 + Math.random() * 6;
     const r = Math.random();
     if (near && near.ahead && stam > 50 && r < 0.45) o.effTarget = 86 + Math.random() * 14;
@@ -1993,13 +2001,29 @@ function pickNations() {
   for (const r of S.rivals) r.team = null;
 }
 // 🤖 จำนวนบอทของแต่ละแบบการแข่ง (ทีมชาติ = ต่อชาติ) · เลือกจากแผงผู้ดูแล จำค่าไว้
-const BOT_DEFAULT = { classic: 3, nation: 2, survival: 6, fair: 4, prank: 8 };
+const BOT_DEFAULT = { classic: 3, nation: 3, survival: 6, fair: 4, prank: 8 };
 const BOT_CHOICES = ['0', '1', '2', '3', '4', '5', '6', '8', '10', '12'];
 const BOTS = (() => {
   const b = Object.assign({}, BOT_DEFAULT);
-  try { const v = JSON.parse(localStorage.getItem('mtb.bots') || '{}'); for (const k in b) if (Number.isInteger(v[k]) && v[k] >= 0 && v[k] <= 12) b[k] = v[k]; } catch (e) { /* ignore */ }
+  try {
+    const v = JSON.parse(localStorage.getItem('mtb.bots') || '{}');
+    for (const k in b) if (Number.isInteger(v[k]) && v[k] >= 0 && v[k] <= 12) b[k] = v[k];
+    // ค่าเก่า (ทีมชาติชาติละ 2) → 3 ให้มีบอท เก่ง/ฉลาด/หลบหลีก ครบชาติละ 1 ตัว
+    if (localStorage.getItem('mtb.bots.v') !== '2') { b.nation = Math.max(b.nation, 3); localStorage.setItem('mtb.bots', JSON.stringify(b)); localStorage.setItem('mtb.bots.v', '2'); }
+  } catch (e) { /* ignore */ }
   return b;
 })();
+// 🤖 นิสัยบอท: เก่ง (แรงดี) / ฉลาด (คุมแรงเก่ง ใช้ลมตามหลังคนอื่น) / หลบหลีก (หลบสิ่งกีดขวางเกือบหมด) / ปกติ / โง่ (หลบไม่ค่อยทัน แรงน้อย)
+//   ทีมชาติ: ทุกชาติมี เก่ง ฉลาด หลบหลีก อย่างละ 1 ตัว (ตัวที่เกินสุ่มปกติ/โง่) · แบบอื่น: สุ่มผสมทุกนิสัย
+const BOT_SKILLS = {
+  strong: { icon: '💪', name: 'เก่ง', base: 0.03, accel: 1.15, dodge: 0.9, look: 1, crash: 0.8, w: 2 },
+  clever: { icon: '🧠', name: 'ฉลาด', base: 0.012, accel: 1.05, dodge: 0.95, look: 1.15, crash: 0.6, w: 2 },
+  dodger: { icon: '🤸', name: 'หลบหลีก', base: 0.005, accel: 1, dodge: 1, look: 1.45, crash: 0.25, w: 2 },
+  normal: { icon: '', name: 'ปกติ', base: 0, accel: 1, dodge: 0.9, look: 1, crash: 1, w: 2.5 },
+  dumb:   { icon: '🤪', name: 'โง่', base: -0.025, accel: 0.9, dodge: 0.45, look: 0.7, crash: 2, w: 1.5 },
+};
+function skillOf(r) { return (r && r.bot && BOT_SKILLS[r.skill]) || BOT_SKILLS.normal; }
+function randomSkill() { return pickWeighted(Object.fromEntries(Object.entries(BOT_SKILLS).map(([k, s]) => [k, s.w])), Math.random()); }
 function saveBots() { try { localStorage.setItem('mtb.bots', JSON.stringify(BOTS)); } catch (e) { /* ignore */ } }
 function botLabel(t) { return RTYPE === 'nation' && t === 'nation' ? `ชาติละ ${BOTS.nation} (${BOTS.nation * NATION_COUNT} ตัว)` : `${BOTS[t]} ตัว`; }
 function likeMode() { return MODE === 'race' && RTYPE !== 'classic'; }
@@ -2021,7 +2045,16 @@ function applyTeams() {
   for (const r of S.rivals) {
     if (r.jersey0 === undefined) r.jersey0 = r.jersey;
     if (r.base0 === undefined) r.base0 = r.base;
-    r.base = RTYPE === 'fair' ? 0.99 : r.base0;   // แฟร์เกม: แรงพื้นฐานเท่ากันทุกคน
+    if (r.bot) {
+      if (r.skillRnd === undefined) r.skillRnd = Math.random() < 0.6 ? 'normal' : 'dumb';
+      if (nation) {
+        const k = Math.floor(bi / NATIONS.length);   // ลำดับของบอทในชาตินั้น
+        r.skill = ['strong', 'clever', 'dodger'][k] || r.skillRnd;
+      } else if (!r.skillMix) r.skillMix = randomSkill();
+      if (!nation) r.skill = r.skillMix;
+    }
+    // แฟร์เกม: แรงพื้นฐานเท่ากันทุกคน (นิสัยยังต่างกันที่การหลบ/คุมแรง)
+    r.base = RTYPE === 'fair' ? 0.99 : r.base0 + skillOf(r).base;
     if (nation && r.bot) { r.team = NATIONS[bi++ % NATIONS.length]; r.jersey = COUNTRIES[r.team].jersey; }
     else if (!nation) { r.team = null; r.jersey = r.jersey0; }
   }
@@ -2173,7 +2206,7 @@ function setStage(st) {
   if (st.serverNow) RACE.offset = st.serverNow - Date.now();
 }
 function loadRace() {
-  const local = () => { if (!RACE.stage) setStage({ no: 1, startedAt: Date.now(), durationMs: 30 * 60000, serverNow: Date.now() }); };
+  const local = () => { if (!RACE.stage) setStage({ no: 1, startedAt: Date.now(), durationMs: 15 * 60000, serverNow: Date.now() }); };
   if (typeof fetch !== 'function') return local();
   fetch('/race').then(r => r.json()).then(d => {
     setStage(d.stage);
@@ -2608,7 +2641,8 @@ function updateRivals(dt) {
     }
     target = Math.min(target, SP.on ? S.speed * 1.5 : TOP_SPEED * 0.95 * Math.max(1, RSPD.k));
     const stopping = r.fallT > 0 || r.stopT > 0;
-    r.speed += clamp(target - r.speed, -MAX_SPEED * (stopping ? 3 : 0.8) * dt, ACCEL * 1.1 * effortAccel(r.effort) * dt);
+    const sk = skillOf(r);
+    r.speed += clamp(target - r.speed, -MAX_SPEED * (stopping ? 3 : 0.8) * dt, ACCEL * 1.1 * sk.accel * effortAccel(r.effort) * dt);
     r.speed = Math.max(0, r.speed);
     const prevZ = r.z;
     r.z += r.speed * dt;
@@ -2617,13 +2651,13 @@ function updateRivals(dt) {
     r.retarget -= dt;
     if (r.retarget <= 0 && r.passT <= 0) { r.tx = -0.65 + Math.random() * 1.3; r.retarget = 2 + Math.random() * 4; }
     let fast = r.passT > 0;
-    const look = 700 + r.speed * 1.1;   // มองไกลตามความเร็ว (~1 วิข้างหน้า) หลบทัน
+    const look = (700 + r.speed * 1.1) * sk.look;   // มองไกลตามความเร็ว (~1 วิข้างหน้า) หลบทัน · หลบหลีกมองไกลกว่า โง่มองใกล้
     const inRange = gap > -3500 && gap < (DRAW - 8) * SEG_L;
     for (const o of S.objects) {
       if (o.kind !== 'obst') continue;
       const def = OB[o.type];
       const d = o.z - r.z;
-      if (o.dodge[r.idx] === undefined) o.dodge[r.idx] = def.bad && Math.random() < 0.9;   // นักปั่นที่เพิ่งเข้ามา
+      if (o.dodge[r.idx] === undefined) o.dodge[r.idx] = def.bad && Math.random() < sk.dodge;   // นักปั่นที่เพิ่งเข้ามา · โอกาสหลบตามนิสัยบอท
       if (d > 0 && d < look && o.dodge[r.idx] && def.bad && def.w < 0.9 && Math.abs(o.x - r.x) < o.w + 0.18) {
         r.tx = clamp(o.x + (o.x > r.x ? -1 : 1) * (o.w + 0.3), -0.85, 0.85);
         if (Math.abs(r.tx) >= 0.85) r.tx = o.x + (o.x > 0 ? -1 : 1) * (o.w + 0.3);
@@ -2646,7 +2680,7 @@ function updateRivals(dt) {
       }
     }
     // อยู่ไกลเกินระยะที่มีสิ่งกีดขวางจริง → สุ่มชนเป็นครั้งคราวให้ยุติธรรม
-    if (!inRange && !SP.on && r.stopT <= 0 && Math.random() < DIFFS[S.diff].obst * (r.speed / SEG_L) * 0.06 * dt) {
+    if (!inRange && !SP.on && r.stopT <= 0 && Math.random() < DIFFS[S.diff].obst * (r.speed / SEG_L) * 0.06 * sk.crash * dt) {
       r.speed = 0; r.stopT = 1.4 + Math.random() * 1.2;
     }
     r.x = lerp(r.x, clamp(r.tx, -0.85, 0.85), clamp(dt * (fast ? 3.2 : 1.5), 0, 1));
@@ -3832,10 +3866,14 @@ function drawRider(x, y, k, r) {
   if (r.splat) drawEmo(r.splat.emoji, x + 40 * k, y - 520 * k, 230 * k);
   // แถบแรงปั่นเหนือหัว + ไอคอนอาการ (เหนื่อย/หอบ/ปกติ/สู้/สู้มาก)
   if (!r.extra && r.effort !== undefined && k * 700 > 12) {
-    const lv = effortLv(r.effort), bw = 60, by = y - 880 * k - 16;
-    rr(x - bw / 2, by, bw, 8, 4, 'rgba(0,0,0,0.5)');
-    rr(x - bw / 2, by, Math.max(8, bw * r.effort / 100), 8, 4, lv.color);
-    drawEmo(r.stopT > 0 ? '💥' : lv.icon, x, by - 12 + 9, 18);   // อีโมจิจากภาพที่จำไว้ (เร็วกว่าวาดเป็นตัวหนังสือ)
+    // เล็กและจาง (ผู้ใช้ขอ) · ย่อตามระยะ คนไกลยิ่งเล็ก ไม่รกจอ
+    const lv = effortLv(r.effort), sc = clamp(k * 700 / 130, 0.45, 1), bw = 34 * sc, bh = Math.max(2, 4 * sc), by = y - 880 * k - 10;
+    const pa = ctx.globalAlpha;
+    ctx.globalAlpha = pa * 0.55;
+    rr(x - bw / 2, by, bw, bh, bh / 2, 'rgba(0,0,0,0.35)');
+    rr(x - bw / 2, by, Math.max(bh, bw * r.effort / 100), bh, bh / 2, lv.color);
+    drawEmo(r.stopT > 0 ? '💥' : lv.icon, x, by - 1, 11 * sc);   // อีโมจิจากภาพที่จำไว้ (เร็วกว่าวาดเป็นตัวหนังสือ)
+    ctx.globalAlpha = pa;
   }
   // ไม่แสดงลูกโป่งคำพูดเหนือหัวแล้ว (ยังมีเสียงพูดตามเดิม)
 }
@@ -4706,7 +4744,7 @@ function toggleAdmin() {
 // ---- หน้า /admin: ส่งคำสั่ง / รับสถานะจากหน้าเกมผ่านเซิร์ฟเวอร์
 const REMOTE = { on: new Set(), age: -1, mode: null, pend: new Map() };
 // กดปุ่มในหน้า /admin แล้วติดไฟทันที (เดาผลไว้ก่อน) ไม่ต้องรอหน้าเกมตอบกลับ — หน้าเกมยืนยันแล้วค่อยใช้ค่าจริง
-const PRED_SINGLE = new Set(['mode', 'track', 'cohesion', 'sharp', 'rtype', 'camstyle', 'pack', 'action', 'tmode', 'host', 'vgender', 'fontsz']);
+const PRED_SINGLE = new Set(['mode', 'track', 'cohesion', 'sharp', 'rtype', 'camstyle', 'pack', 'action', 'tmode', 'host', 'vgender', 'fontsz', 'rmin']);
 const PRED_TOGGLE = new Set(['space', 'pause', 'music', 'voice', 'flist', 'gifts', 'regroup', 'ann', 'annchat', 'comm']);
 const PRED_SKIP = new Set(['sfxvol', 'envvol', 'bgtone', 'rspd', 'close']);
 function predictPanel(kind, val) {
@@ -4977,6 +5015,17 @@ function adminAct(kind, val, opt) {
       toast(`🔍 ความคมภาพ: ${SHARP_LEVELS[val] || val} (${val}x)`, '#e1f5fe');
       break;
     case 'fitwin': fitWindow(false); break;
+    case 'rmin': {
+      const mn = parseInt(val, 10);
+      if (![15, 30, 45, 60].includes(mn)) break;
+      const apply = st => { setStage(st); banner(`⏱️ รอบละ ${mn} นาที`, `รอบนี้เหลือ ${fmtMS(Math.max(0, stageLeftMs() || 0))}`); announce('race', `ตั้งเวลาแข่งรอบละ ${mn} นาที{k}`); renderAdmin(); };
+      if (S.live.server && typeof fetch === 'function') {
+        fetch('/race/minutes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ minutes: mn }) })
+          .then(r => r.json()).then(j => { if (j.ok) apply(j.stage); else toast('⚠️ ' + (j.msg || 'เปลี่ยนเวลาไม่ได้'), '#ffccbc'); })
+          .catch(() => toast('⚠️ ติดต่อเซิร์ฟเวอร์ไม่ได้', '#ffccbc'));
+      } else apply(Object.assign({}, RACE.stage || { no: 1, startedAt: Date.now() }, { durationMs: mn * 60000, serverNow: Date.now() }));
+      break;
+    }
     case 'fontsz': setFontSize(val); toast(`🔤 ตัวหนังสือ: ${FONT_SIZES[val] ? FONT_SIZES[val].name : val}`, '#e1f5fe'); break;
     case 'host':
       if (MODE !== 'race') { toast('⚠️ ใช้ได้ในโหมดแข่งผู้ติดตาม', '#ffccbc'); break; }
@@ -5066,6 +5115,7 @@ function adminActive(kind, val) {
     case 'music': return S.musicOn;
     case 'voice': return S.voiceOn;
     case 'fontsz': return FONTSZ === val;
+    case 'rmin': return !!RACE.stage && Math.round(RACE.stage.durationMs / 60000) === parseInt(val, 10);
     case 'ann': return ANN.on;
     case 'annchat': return ANN.chat;
     case 'comm': return ANN.comm;
@@ -5113,6 +5163,8 @@ function renderAdmin() {
   <div class="row">แบบการแข่ง (เปลี่ยนแล้วเริ่มรอบใหม่):</div>
   <div class="grid">${Object.entries(RACE_TYPES).map(([k, t]) => btn('rtype', k, `${t.icon} ${t.name}`)).join('')}</div>
   <div class="row" style="opacity:.75">${Object.values(RACE_TYPES).map(t => `${t.icon} <b>${t.name}</b>: ${t.tip}`).join('<br>')}</div>
+  <div class="row">⏱️ เวลาต่อรอบ (ค่าเริ่มต้น 15 นาที · เปลี่ยนแล้วใช้กับรอบนี้ทันที):</div>
+  <div class="grid">${['15', '30', '45', '60'].map(v => btn('rmin', v, `⏱️ ${v} นาที`)).join('')}</div>
   <div class="row">🙋 ผู้จัด / เจ้าของช่อง (เริ่มเกมทุกครั้ง = ไม่ลงแข่ง):</div>
   <div class="grid">${btn('host', 'out', '🪑 ผู้จัดไม่ลงแข่ง')}${btn('host', 'in', '🙋 ผู้จัดลงแข่ง')}</div>
   <div class="row">🤖 จำนวนบอท ${RACE_TYPES[RTYPE].icon} ${RACE_TYPES[RTYPE].name}${RTYPE === 'nation' ? ' (ต่อชาติ สูงสุด 4)' : ''} — ตอนนี้ ${botLabel(RTYPE)}:</div>
@@ -5124,7 +5176,7 @@ function renderAdmin() {
     <tr><td>กดติดตาม</td><td>ได้นักปั่นของตัวเอง ชื่อ + รูปโปรไฟล์บนหัว (สูงสุด ${RACE.maxRiders} คน รวมคนสร้างและบอท 4)</td></tr>
     <tr><td>ของขวัญ</td><td>ผู้ส่งพุ่งนำตามราคา (1.5 ม./💎 สำหรับช่วยตัวเอง) + ผลตามประเภท · แก้ได้ที่ "raceGifts" ใน config.json</td></tr>
     ${(RACE.tiers && RACE.tiers.length ? RACE.tiers : DEFAULT_RACE_TIERS).slice().sort((a, b) => a.min - b.min).map(t => `<tr><td>💎 ${t.min}+</td><td>${RACE_CAT[t.cat] ? RACE_CAT[t.cat].icon + ' ' + RACE_CAT[t.cat].name + ' — ' + RACE_CAT[t.cat].tip : adminEsc(t.cat)}</td></tr>`).join('')}
-    <tr><td>รอบ</td><td>${Math.round((RACE.stage ? RACE.stage.durationMs : 1800000) / 60000)} นาที · 40 วิสุดท้ายมีเส้นชัย ใครข้ามก่อนได้อันดับก่อน · สรุป 1-2-3 แล้วล้างอันดับเริ่มรอบใหม่ (บันทึกทุกรอบ) · แก้ "stageMinutes" ใน config.json</td></tr>
+    <tr><td>รอบ</td><td>${Math.round((RACE.stage ? RACE.stage.durationMs : 1800000) / 60000)} นาที · 40 วิสุดท้ายมีเส้นชัย ใครข้ามก่อนได้อันดับก่อน · สรุป 1-2-3 แล้วล้างอันดับเริ่มรอบใหม่ (บันทึกทุกรอบ) · เปลี่ยนเวลาได้ที่ปุ่ม ⏱️ เวลาต่อรอบ</td></tr>
     <tr><td>เคาะจอ</td><td>Survival / ทีมชาติ: ทุกไลก์ได้แรงเพิ่ม · ครบ ${LIKE_LEAD} ครั้ง = ลุ้นขึ้นนำ ${Math.round(LIKE_LEAD_CHANCE * 100)}% · แฟร์เกม: ครบ ${LIKE_LEAD} = เร่ง ${FAIR_BOOST_S} วิ · กลั่นแกล้ง: ครบ ${LIKE_LEAD} = ปากล้วยใส่คนข้างหน้า</td></tr>
   </table>
   <div class="row">📊 สถิติรอบที่ผ่านมา:</div>
@@ -5772,7 +5824,7 @@ function drawRankList(x0, y0) {
     ell(x0 + 12, y, 6.5, 6.5, o.me ? '#ff7043' : o.jersey);
     textC(String(i + 1), x0 + 12, y + 1, i === 0 ? '#000' : '#fff', 9, 800);
     font(11, 600); ctx.textAlign = 'left'; ctx.fillStyle = '#fff';
-    let nm = (i === 0 ? '👑' : '') + (o.me ? playerName() : o.name);
+    let nm = (i === 0 ? '👑' : '') + (o.bot && skillOf(o).icon ? skillOf(o).icon : '') + (o.me ? playerName() : o.name);
     if (nm.length > 9) nm = nm.slice(0, 8) + '…';
     ctx.fillText(nm, x0 + 22, y + 1);
     const sup = MODE === 'race' ? (o.me ? 0 : o.diamonds || 0) : S.support[o.me ? 0 : o.char];

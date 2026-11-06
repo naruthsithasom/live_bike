@@ -22,7 +22,7 @@
     "database": "",
     "syncSeconds": 20
   },
-  "stageMinutes": 30,
+  "roundMinutes": 15,
   "maxRiders": 30,
   "raceGifts": {
     "tiers": [
