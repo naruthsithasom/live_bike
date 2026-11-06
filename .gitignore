@@ -1,0 +1,20 @@
+# ไลบรารี (ติดตั้งใหม่ได้ด้วย npm install)
+node_modules/
+
+# การตั้งค่าส่วนตัว: ชื่อบัญชี TikTok, รหัสผ่านฐานข้อมูล → ใช้ config.example.json แทน
+config.json
+
+# log เหตุการณ์ TikTok: มีชื่อ/แชทของผู้ชมจริง ห้ามเผยแพร่
+logs/
+
+# การตั้งค่าเฉพาะเครื่อง / เครื่องมือ
+.claude/
+.env
+.env.*
+*.log
+npm-debug.log*
+
+# ไฟล์ระบบ
+.DS_Store
+Thumbs.db
+desktop.ini

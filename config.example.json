@@ -1,0 +1,105 @@
+{
+  "tiktokUsername": "",
+  "eventLog": {
+    "enabled": true,
+    "raw": true
+  },
+  "db": {
+    "enabled": true,
+    "host": "127.0.0.1",
+    "port": 3306,
+    "user": "root",
+    "password": "",
+    "database": "live_bike"
+  },
+  "dbRemote": {
+    "enabled": false,
+    "host": "",
+    "port": 3306,
+    "user": "",
+    "password": "",
+    "database": "",
+    "syncSeconds": 20
+  },
+  "stageMinutes": 30,
+  "maxRiders": 30,
+  "raceGifts": {
+    "tiers": [
+      {
+        "min": 1,
+        "cat": "self"
+      },
+      {
+        "min": 5,
+        "cat": "help"
+      },
+      {
+        "min": 20,
+        "cat": "prank"
+      },
+      {
+        "min": 99,
+        "cat": "mood"
+      },
+      {
+        "min": 299,
+        "cat": "scene"
+      }
+    ],
+    "byName": {}
+  },
+  "likesPerJump": 100,
+  "maxRepeatPerGift": 10,
+  "giftActions": {
+    "Rose": "jump",
+    "TikTok": "jump",
+    "GG": "tuck",
+    "Ice Cream Cone": "wheelie",
+    "Finger Heart": "drift",
+    "Heart Me": "wheelie",
+    "Perfume": "prank",
+    "Doughnut": "throw",
+    "Hand Hearts": "turbo",
+    "Cap": "crash",
+    "Galaxy": "space",
+    "Universe": "space"
+  },
+  "diamondTiers": [
+    {
+      "min": 1,
+      "action": "jump"
+    },
+    {
+      "min": 5,
+      "action": "wheelie"
+    },
+    {
+      "min": 10,
+      "action": "tuck"
+    },
+    {
+      "min": 20,
+      "action": "drift"
+    },
+    {
+      "min": 30,
+      "action": "throw"
+    },
+    {
+      "min": 50,
+      "action": "crash"
+    },
+    {
+      "min": 99,
+      "action": "prank"
+    },
+    {
+      "min": 199,
+      "action": "turbo"
+    },
+    {
+      "min": 1000,
+      "action": "space"
+    }
+  ]
+}

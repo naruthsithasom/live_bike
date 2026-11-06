@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#000000">
+  <title>MTB Endless Ride</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <button id="adminBtn" title="ข้อมูลปุ่ม / แผงผู้ดูแล">ℹ️</button>
+  <div id="wrap">
+    <canvas id="game"></canvas>
+    <button id="camBtn" title="เปลี่ยนมุมกล้อง">📷</button>
+    <button id="giftBtn" title="ส่งของขวัญ">🎁</button>
+    <div id="giftPanel" class="hidden">
+      <div class="ph">
+        <span>🎁 เลือกนักปั่น แล้วกดของขวัญ</span>
+        <span class="tools">
+          <button id="musicBtn" title="เพลง">🎵</button>
+          <button id="voiceBtn" title="เสียงพูด">🗣️</button>
+          <button id="giftClose" title="ปิด">✕</button>
+        </span>
+      </div>
+      <div class="vol">🔊 เสียงเอฟเฟกต์ <input type="range" class="sfxVol" min="0" max="100" step="5" value="80"> <b class="sfxVolTxt">80%</b></div>
+      <div class="vol">🌧️ เสียงฝน/ลม <input type="range" class="envVol" min="0" max="100" step="5" value="50"> <b class="envVolTxt">50%</b></div>
+      <div id="charRow"></div>
+      <div id="giftGrid"></div>
+      <div class="hint">ผู้ชม TikTok: พิมพ์ <b>1-6</b> ในแชท เพื่อเลือกเชียร์นักปั่น แล้วส่งของขวัญได้เลย</div>
+    </div>
+  </div>
+  <aside id="admin"></aside>
+  <script src="game.js"></script>
+</body>
+</html>

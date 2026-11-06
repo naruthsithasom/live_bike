@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ประสิทธิภาพเครื่อง · MTB Endless Ride</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #11131c; --card: #1a1e2b; --line: rgba(255, 255, 255, 0.08); --text: #e8eaf0; --dim: #8f96a8;
+      --ok: #5fd38a; --warn: #ffc107; --bad: #ff6b6b; --accent: #80d8ff;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 400 13px/1.45 Kanit, "Noto Sans Thai", Tahoma, sans-serif; }
+    main { max-width: 620px; margin: 0 auto; padding: 12px 14px 40px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    h1 { font-size: 17px; margin: 0; font-weight: 800; }
+    h2 { font-size: 13px; color: #ffd54f; margin: 16px 0 6px; font-weight: 700; }
+    .verdict { font-weight: 800; padding: 4px 10px; border-radius: 999px; background: var(--card); white-space: nowrap; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 9px 10px 8px; min-width: 0; }
+    .card .k { color: var(--dim); font-size: 12px; display: flex; justify-content: space-between; gap: 6px; }
+    .card .v { font-size: 26px; font-weight: 800; line-height: 1.15; }
+    .card .v small { font-size: 13px; font-weight: 600; color: var(--dim); }
+    .card .s { color: var(--dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bar { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); margin: 5px 0 4px; overflow: hidden; }
+    .bar i { display: block; height: 100%; width: 0; border-radius: 3px; background: var(--ok); transition: width .4s, background .4s; }
+    canvas.spark { width: 100%; height: 28px; display: block; }
+    table { width: 100%; border-collapse: collapse; background: var(--card); border-radius: 12px; overflow: hidden; }
+    td, th { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: right; }
+    th { color: var(--dim); font-weight: 600; font-size: 12px; }
+    td:first-child, th:first-child { text-align: left; }
+    tr:last-child td { border-bottom: none; }
+    .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+    .tips { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+    .tips div { padding: 2px 0; }
+    .note { color: var(--dim); font-size: 11px; margin-top: 4px; }
+    .page { margin-bottom: 8px; }
+    .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+    .kv b { font-weight: 600; text-align: right; }
+    .kv span { color: var(--dim); }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>📈 ประสิทธิภาพเครื่อง</h1>
+    <span id="verdict" class="verdict">กำลังโหลด…</span>
+  </header>
+  <div id="err" class="tips bad" style="display:none"></div>
+
+  <h2>🖥️ เครื่องคอม</h2>
+  <div class="grid">
+    <div class="card"><div class="k"><span>CPU</span><span id="cpuN"></span></div><div class="v" id="cpu">–</div><div class="bar"><i id="cpuB"></i></div><canvas class="spark" id="cpuS"></canvas><div class="s" id="cpuM"></div></div>
+    <div class="card"><div class="k"><span>RAM</span><span id="ramN"></span></div><div class="v" id="ram">–</div><div class="bar"><i id="ramB"></i></div><canvas class="spark" id="ramS"></canvas><div class="s" id="ramM"></div></div>
+    <div class="card"><div class="k"><span>GPU (การ์ดจอ)</span><span></span></div><div class="v" id="gpu">–</div><div class="bar"><i id="gpuB"></i></div><canvas class="spark" id="gpuS"></canvas><div class="s" id="gpuM"></div></div>
+    <div class="card"><div class="k"><span>อุณหภูมิ</span><span>เซ็นเซอร์บอร์ด</span></div><div class="v" id="temp">–</div><div class="bar"><i id="tempB"></i></div><canvas class="spark" id="tempS"></canvas><div class="s" id="tempM"></div></div>
+    <div class="card"><div class="k"><span>เน็ต อัปโหลด ↑</span><span>ไลฟ์ใช้ขานี้</span></div><div class="v" id="tx">–</div><div class="bar"><i id="txB"></i></div><canvas class="spark" id="txS"></canvas><div class="s" id="txM"></div></div>
+    <div class="card"><div class="k"><span>เน็ต ดาวน์โหลด ↓</span><span></span></div><div class="v" id="rx">–</div><div class="bar"><i id="rxB"></i></div><canvas class="spark" id="rxS"></canvas><div class="s" id="rxM"></div></div>
+  </div>
+
+  <h2>🧩 โปรแกรมที่เกี่ยวกับไลฟ์</h2>
+  <table id="apps"><tr><th>โปรแกรม</th><th>CPU</th><th>GPU</th><th>RAM</th></tr></table>
+  <div class="note">CPU คิดเป็น % ของทั้งเครื่อง · Chrome รวมทุกแท็บ</div>
+
+  <h2>🎮 เกม (แต่ละหน้าจอที่เปิดเกมอยู่)</h2>
+  <div id="pages"></div>
+
+  <h2>📡 ไลฟ์ & เซิร์ฟเวอร์เกม</h2>
+  <div class="card"><div class="kv" id="srv"></div></div>
+
+  <h2>💡 คำแนะนำ</h2>
+  <div class="tips" id="tips">–</div>
+  <div class="note">อัปเดตทุก 1 วินาที · ตัวอ่าน GPU/เน็ต/อุณหภูมิ ทำงานเฉพาะตอนเปิดหน้านี้ (ปิดหน้านี้แล้วหยุดเองใน 20 วิ)</div>
+</main>
+<script>
+'use strict';
+// ข้อความที่มาจากหน้าเกม/เครือข่าย → แปลงเป็นข้อความธรรมดาก่อนแสดง (กันแทรกสคริปต์)
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const $ = id => document.getElementById(id);
+const HIST = {};
+const N = 60;
+function push(k, v) { (HIST[k] = HIST[k] || []).push(v); if (HIST[k].length > N) HIST[k].shift(); }
+function lvl(v, warn, bad) { return v >= bad ? 'bad' : v >= warn ? 'warn' : 'ok'; }
+const COL = { ok: '#5fd38a', warn: '#ffc107', bad: '#ff6b6b' };
+function spark(id, k, max, cls) {
+  const c = $(id), h = HIST[k] || [];
+  const w = c.clientWidth, hh = c.clientHeight, dpr = window.devicePixelRatio || 1;
+  if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(hh * dpr); }
+  const x = c.getContext('2d');
+  x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, w, hh);
+  if (h.length < 2) return;
+  const m = Math.max(max || 0, ...h, 1e-9);
+  x.beginPath();
+  h.forEach((v, i) => { const px = w * (i + N - h.length) / (N - 1), py = hh - 2 - (hh - 4) * v / m; i ? x.lineTo(px, py) : x.moveTo(px, py); });
+  x.strokeStyle = COL[cls] || '#80d8ff'; x.lineWidth = 1.5; x.stroke();
+  x.lineTo(w, hh); x.lineTo(w * (N - h.length) / (N - 1), hh); x.closePath();
+  x.globalAlpha = 0.15; x.fillStyle = COL[cls] || '#80d8ff'; x.fill(); x.globalAlpha = 1;
+}
+function setCard(k, text, pct, cls, sub) {
+  const v = $(k); v.innerHTML = text; v.className = 'v ' + cls;
+  const b = $(k + 'B'); b.style.width = Math.max(0, Math.min(100, pct)) + '%'; b.style.background = COL[cls];
+  if (sub !== undefined) $(k + 'M').textContent = sub;
+}
+const GB = b => (b / 1073741824).toFixed(1);
+const MB = b => Math.round(b / 1048576);
+const mbps = b => (b * 8 / 1e6);
+function fmtMbps(b) { const m = mbps(b); return m >= 1 ? `${m >= 10 ? m.toFixed(0) : m.toFixed(1)}<small> Mbps</small>` : `${(b * 8 / 1000).toFixed(0)}<small> kbps</small>`; }
+function upTime(s) { const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return h ? `${h} ชม. ${m} นาที` : `${m} นาที`; }
+// เวลาแต่ละส่วนของเฟรม (ms) เรียงมากไปน้อย — ดูว่าอะไรกินเวลา
+const PART_NAMES = {
+  'w:road': '🛣️ ถนน', 'w:deco': '🌳 ของข้างทาง/สิ่งกีดขวาง', 'w:riders': '🚴 นักปั่น', 'w:sky+bg': '🌄 ท้องฟ้า/ฉากหลัง', 'w:project': '📐 คำนวณมุมมอง',
+  'r:hud': '🔤 ป้าย/ตัวหนังสือบนจอ', 'r:fx': '🌧️ อากาศ/แสง', 'r:pov': '🚲 แฮนด์มุมผู้ปั่น', 'r:space': '🚀 อวกาศ',
+  'u:rivals': '🤖 คิดคู่แข่ง', 'u:player': '🧍 คิดผู้เล่น', 'u:pack': '👥 กลุ่มใหญ่', 'u:objects': '🪨 สิ่งของ/อันดับ', 'u:camera': '🎥 กล้อง', 'u:music': '🎵 เพลง', 'u:admin': '🛠️ แผงผู้ดูแล',
+};
+function partsHtml(parts) {
+  if (!parts) return '';
+  const list = Object.entries(parts).filter(([, v]) => v >= 0.05).sort((a, b) => b[1] - a[1]).slice(0, 7);
+  if (!list.length) return '';
+  const max = Math.max(...list.map(e => e[1]), 1);
+  return `<div style="margin-top:8px;color:var(--dim);font-size:12px">⏱️ เวลาแต่ละส่วนต่อเฟรม</div>` + list.map(([k, v]) =>
+    `<div style="display:grid;grid-template-columns:140px 1fr 52px;gap:6px;align-items:center;font-size:12px"><span>${PART_NAMES[k] || k}</span>
+      <div class="bar" style="margin:0"><i style="width:${v / max * 100}%;background:${v > 6 ? COL.bad : v > 3 ? COL.warn : COL.ok}"></i></div><b style="text-align:right">${v} ms</b></div>`).join('');
+}
+const APP_NAMES = { chrome: '🌐 Chrome (เกม)', 'TikTok LIVE Studio': '🎥 TikTok LIVE Studio', node: '🖥️ เซิร์ฟเวอร์เกม (node)', obs64: '📹 OBS' };
+
+function render(d) {
+  const tips = [];
+  let worst = 'ok';
+  const bump = c => { if (c === 'bad' || (c === 'warn' && worst === 'ok')) worst = c; };
+  // CPU / RAM
+  const cpuC = lvl(d.cpu, 70, 90); bump(cpuC); push('cpu', d.cpu);
+  setCard('cpu', `${d.cpu.toFixed(0)}<small>%</small>`, d.cpu, cpuC, d.cpuModel.replace(/\s+/g, ' ').trim());
+  $('cpuN').textContent = `${d.cores} เธรด`; spark('cpuS', 'cpu', 100, cpuC);
+  const ramP = d.ramUsed / d.ramTotal * 100, ramC = lvl(ramP, 80, 92); bump(ramC); push('ram', ramP);
+  setCard('ram', `${ramP.toFixed(0)}<small>%</small>`, ramP, ramC, `ใช้ ${GB(d.ramUsed)} / ${GB(d.ramTotal)} GB`);
+  $('ramN').textContent = ''; spark('ramS', 'ram', 100, ramC);
+  if (cpuC === 'bad') tips.push('🔥 CPU ใกล้เต็ม — ปิดโปรแกรม/แท็บอื่นที่ไม่ใช้ หรือลด 🔍 ความคมภาพในแผงผู้ดูแล');
+  if (ramC !== 'ok') tips.push('⚠️ RAM เหลือน้อย — ปิดแท็บ Chrome ที่ไม่ใช้');
+  // จาก Windows (GPU / อุณหภูมิ / เน็ต / โปรแกรม)
+  const s = d.sys;
+  if (!s) {
+    for (const k of ['gpu', 'temp', 'tx', 'rx']) setCard(k, '<small>กำลังอ่าน…</small>', 0, 'ok', d.sampler ? 'รอ Windows ส่งค่า (2-5 วิแรก)' : 'อ่านไม่ได้ในเครื่องนี้');
+  } else {
+    const g = s.gpu || 0, gC = lvl(g, 75, 92); bump(gC); push('gpu', g);
+    setCard('gpu', `${g.toFixed(0)}<small>%</small>`, g, gC, `${s.gpuName || ''}${s.vram ? ` · VRAM ${MB(s.vram)} MB` : ''}`); spark('gpuS', 'gpu', 100, gC);
+    if (gC === 'bad') tips.push('🔥 การ์ดจอทำงานหนัก — ลด 🔍 ความคมภาพ (2x → 1.5x) หรือลดขนาดหน้าต่าง Chrome');
+    if (typeof s.tempC === 'number' && s.tempC > 0) {
+      const t = s.tempC, tC = lvl(t, 80, 92); bump(tC); push('temp', t);
+      setCard('temp', `${t.toFixed(0)}<small>°C</small>`, t, tC, t >= 92 ? 'ร้อนมาก! ระวังเครื่องลดความเร็วเอง' : t >= 80 ? 'ค่อนข้างร้อน' : 'ปกติ'); spark('tempS', 'temp', 100, tC);
+      if (tC !== 'ok') tips.push('🌡️ เครื่องร้อน — วางให้อากาศถ่ายเท/ใช้พัดลมรองโน้ตบุ๊ก ถ้าร้อนจัดเครื่องจะช้าลงเอง');
+    } else setCard('temp', '<small>ไม่มีเซ็นเซอร์</small>', 0, 'ok', 'Windows ไม่ส่งค่าอุณหภูมิ');
+    const tx = s.tx || 0, rx = s.rx || 0, bw = s.bw || 0;
+    push('tx', mbps(tx)); push('rx', mbps(rx));
+    setCard('tx', fmtMbps(tx), Math.min(100, mbps(tx) / 8 * 100), 'ok', bw ? `ลิงก์ Wi-Fi/LAN ${(bw / 1e6).toFixed(0)} Mbps` : '');
+    setCard('rx', fmtMbps(rx), Math.min(100, mbps(rx) / 20 * 100), 'ok', '');
+    spark('txS', 'tx', 4, 'ok'); spark('rxS', 'rx', 4, 'ok');
+    if (d.server.tiktok === 'connected' && mbps(tx) < 1.5) tips.push('📶 อัปโหลดต่ำกว่า 1.5 Mbps ตอนไลฟ์ — ภาพอาจแตก ลองใช้สาย LAN หรือย้ายใกล้เราเตอร์');
+    // ตารางโปรแกรม
+    const apps = s.apps || {}, gapp = s.gpuApp || {};
+    const rows = Object.keys(APP_NAMES).filter(k => apps[k]).map(k => {
+      const a = apps[k], c = lvl(a.cpu, 35, 60);
+      return `<tr><td>${APP_NAMES[k]}${a.n > 1 ? ` <small style="color:var(--dim)">×${a.n}</small>` : ''}</td><td class="${c}">${a.cpu.toFixed(1)}%</td><td>${gapp[k] !== undefined ? gapp[k] + '%' : '–'}</td><td>${MB(a.ram)} MB</td></tr>`;
+    });
+    $('apps').innerHTML = '<tr><th>โปรแกรม</th><th>CPU</th><th>GPU</th><th>RAM</th></tr>' + (rows.join('') || '<tr><td colspan="4">ไม่พบโปรแกรม</td></tr>');
+    if (!apps['TikTok LIVE Studio']) tips.push('ℹ️ ยังไม่ได้เปิด TikTok LIVE Studio');
+  }
+  // เกมแต่ละหน้า
+  const pg = d.pages || [];
+  $('pages').innerHTML = pg.length ? pg.map(p => {
+    const fC = p.fps >= 50 ? 'ok' : p.fps >= 28 ? 'warn' : 'bad'; bump(fC);
+    const stale = p.age > 4000;
+    if (p.hidden || p.fps < 5) tips.push(`⚠️ หน้าเกม (${esc(p.ua)}) แทบไม่วาดภาพ — หน้าต่างถูกย่อ/ถูกบังมิด ภาพไลฟ์จะค้าง อย่าย่อหน้าต่าง Chrome`);
+    else if (fC !== 'ok') tips.push(`🐢 เกมได้ ${p.fps} FPS — ลด 🔍 ความคม (ตอนนี้ ${p.sharp}x) หรือลดจำนวนนักปั่นกลุ่มใหญ่ในแผงผู้ดูแล`);
+    if (p.workMs > 12) tips.push(`⏱️ เกมใช้เวลาคำนวณ+วาด ${p.workMs} ms/เฟรม (ควรต่ำกว่า 10) — ลดความคมภาพ`);
+    return `<div class="card page"><div class="k"><span>${p.ua === 'LIVE Studio' ? '🎥 ลิงก์ใน LIVE Studio' : '🌐 Chrome'} · ${esc(p.scene || '')}</span><span>${stale ? '⏸ ไม่ได้รับค่า ' + Math.round(p.age / 1000) + ' วิ' : p.hidden ? '🙈 ถูกซ่อน' : '👁️ แสดงอยู่'}</span></div>
+      <div class="grid" style="grid-template-columns:auto 1fr;gap:10px;align-items:center">
+        <div class="v ${fC}">${p.fps}<small> FPS</small></div>
+        <div class="kv">
+          <span>ต่อเฟรม</span><b>${p.frameMs} ms · ช้าสุด ${p.worstMs} ms</b>
+          <span>คำนวณ+วาด</span><b class="${p.workMs > 12 ? 'warn' : ''}">${p.workMs} ms · สูงสุด ${p.workMax} ms</b>
+        </div>
+      </div>
+      <div class="kv" style="margin-top:6px">
+        <span>ขนาดภาพ</span><b>${p.canvas} px (บนจอ ${p.css} · ความคม ${p.sharp}x)</b>
+        <span>นักปั่น / สิ่งของ</span><b>${p.riders} คน · ${p.objects} ชิ้น</b>
+        <span>หน่วยความจำ JS</span><b>${p.heapMB !== null ? p.heapMB + ' / ' + p.heapLimitMB + ' MB' : '–'}</b>
+        <span>โหมด / กล้อง</span><b>${p.mode === 'race' ? '🏁 ' + ({ classic: 'แข่งปกติ', survival: 'Survival', nation: 'ทีมชาติ' }[p.rtype] || '') : '🎮 จำลอง'} · ${p.space ? '🚀 อวกาศ' : p.cam}</b>
+        <span>เสียง</span><b>${p.audio === 'running' ? '🔊 เปิด' : '🔈 ยังไม่เปิด (แตะจอเกม 1 ครั้ง)'}</b>
+      </div>${partsHtml(p.parts)}</div>`;
+  }).join('') : '<div class="tips warn">ยังไม่พบหน้าเกม — เปิด http://localhost:3000 ใน Chrome</div>';
+  if (!pg.length) bump('warn');
+  // เซิร์ฟเวอร์
+  const sv = d.server, ev = sv.ev || {};
+  const TK = { connected: '<b class="ok">🔴 LIVE</b>', connecting: '<b class="warn">🟡 กำลังเชื่อม</b>', offline: '<b class="warn">⚪ ไลฟ์ออฟไลน์</b>', off: '<b>⚪ ไม่ได้เชื่อม</b>' };
+  $('srv').innerHTML = `
+    <span>TikTok</span>${TK[sv.tiktok] || '<b>' + sv.tiktok + '</b>'}
+    <span>บัญชี</span><b>${sv.username ? '@' + sv.username : '–'} · ❤️ ${sv.likes || 0}</b>
+    <span>จอที่ต่ออยู่</span><b>${sv.clients} จอ (เกม + แผง + หน้านี้)</b>
+    <span>ผู้ติดตามในสนาม</span><b>${sv.roster} คน · รอบ ${sv.stage}</b>
+    <span>ใน 1 นาทีล่าสุด</span><b>🎁 ${ev.gift || 0} · ❤️ ${ev.like || 0} · 💬 ${ev.chat || 0} · 👋 ${ev.join || 0} · 💖 ${ev.follow || 0}</b>
+    <span>ฐานข้อมูล</span><b class="${sv.db ? 'ok' : 'warn'}">${sv.db ? '✅ เชื่อมแล้ว' : '⚠️ ไม่ได้เชื่อม (เปิด MySQL ใน XAMPP)'}</b>
+    <span>เซิร์ฟเวอร์ node</span><b>CPU ${d.node.cpu}% · RAM ${MB(d.node.rss)} MB · เปิดมา ${upTime(d.node.uptime)}</b>`;
+  // สรุป
+  const V = { ok: ['✅ ลื่น', 'ok'], warn: ['⚠️ เริ่มหนัก', 'warn'], bad: ['🔥 หนักเกิน', 'bad'] }[worst];
+  $('verdict').textContent = V[0]; $('verdict').className = 'verdict ' + V[1];
+  $('tips').innerHTML = (tips.length ? [...new Set(tips)] : ['✅ ทุกอย่างปกติ เครื่องรับไหว']).map(t => `<div>${t}</div>`).join('');
+}
+let fails = 0;
+function poll() {
+  fetch('/sys/stats', { cache: 'no-store' }).then(r => r.json()).then(d => { fails = 0; $('err').style.display = 'none'; render(d); })
+    .catch(() => { if (++fails > 1) { $('err').style.display = 'block'; $('err').textContent = '⚠️ ติดต่อเซิร์ฟเวอร์ไม่ได้ — เปิด node server.js ก่อน'; $('verdict').textContent = '–'; } });
+}
+poll();
+setInterval(poll, 1000);
+</script>
+</body>
+</html>

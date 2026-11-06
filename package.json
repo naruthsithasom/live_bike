@@ -1,0 +1,22 @@
+{
+  "name": "live-bike",
+  "version": "1.0.0",
+  "description": "MTB Endless Ride - เกมปั่นจักรยานเสือภูเขา POV บนเบราว์เซอร์ (มือถือ 9:16)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon --watch server.js --watch config --watch models --watch controllers --watch routes --watch lib --ignore views/ -e js server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  },
+  "dependencies": {
+    "mysql2": "^3.24.6",
+    "sequelize": "^6.37.8",
+    "tiktok-live-connector": "^2.5.0"
+  }
+}
