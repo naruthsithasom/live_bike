@@ -1,7 +1,7 @@
 // Controller: เชื่อม TikTok LIVE แล้วแปลงเหตุการณ์ (ของขวัญ แชท ไลก์ ติดตาม ฯลฯ) เป็นคำสั่งให้เกม
 const { config } = require('../config/index');
 const { broadcast } = require('../lib/hub');
-const { avatarOf, viewerOf } = require('../lib/tiktokUser');
+const { avatarOf, viewerOf, fixEventUsers } = require('../lib/tiktokUser');
 const live = require('../models/live');
 const raceModel = require('../models/race');
 const catalog = require('../models/giftCatalog');
@@ -73,8 +73,9 @@ async function start(uniqueId) {
     live.status = 'connecting';
     broadcast({ type: 'status', live });
     // 📜 ดักทุกเหตุการณ์ที่ไลบรารีรู้จัก (70+ ชนิด) ลง log — แยกจากระบบเกม ไม่กระทบการทำงานเดิม
+    // ลงทะเบียนก่อนตัวจัดการอื่น → เติม uniqueId (จาก displayId) ให้ข้อมูลเหตุการณ์ก่อนส่วนอื่นอ่าน (ใช้ object เดียวกัน)
     for (const ev of new Set(Object.values(WebcastEvent || {}))) {
-      conn.on(ev, data => { if (gen === tk.gen) evlog.add(ev, data); });
+      conn.on(ev, data => { fixEventUsers(data); if (gen === tk.gen) evlog.add(ev, data); });
     }
     for (const ev of new Set(Object.values(ControlEvent || {}))) {
       if (ev === 'rawData' || ev === 'decodedData' || ev === 'websocketData') continue;   // ข้อมูลระดับล่าง เยอะเกินไป

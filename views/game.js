@@ -7,7 +7,7 @@
 
 // ---------------------------------------------------------------- setup
 // เวอร์ชันของไฟล์เกม — แก้โค้ดเมื่อไหร่ให้เปลี่ยนค่านี้ หน้า /admin จะเตือนถ้าหน้าเกมยังใช้ไฟล์เก่า (ยังไม่ได้กด F5)
-const GAME_BUILD = '2026-11-06.15';
+const GAME_BUILD = '2026-11-06.16';
 const W = 540, H = 960;
 const cv = document.getElementById('game');
 let ctx = cv.getContext('2d');
@@ -1138,11 +1138,36 @@ function babble(n, pitch) {
 // อ่านออกเสียง (TTS ภาษาไทยของเครื่อง) เรียงคิวทีละประโยค ไม่พูดทับกัน · ประกาศเหตุการณ์ไลฟ์ (ติดตาม/ของขวัญ/แชร์/คอมเมนต์ ฯลฯ)
 // และพากย์การแข่งอัตโนมัติ · ตั้งค่าจากแผงผู้ดูแล จำไว้ใน localStorage 'mtb.ann'
 const ANN = (() => {
-  const d = { on: true, comm: true, chat: true, gender: 'f', vol: 1 };
+  const d = { on: true, comm: true, chat: true, gender: 'f', vol: 1, invite: true, inviteSec: 45 };
   try { const v = JSON.parse(localStorage.getItem('mtb.ann') || '{}'); for (const k in d) if (typeof v[k] === typeof d[k]) d[k] = v[k]; } catch (e) { /* ignore */ }
   return d;
 })();
-function saveAnn() { try { localStorage.setItem('mtb.ann', JSON.stringify({ on: ANN.on, comm: ANN.comm, chat: ANN.chat, gender: ANN.gender, vol: ANN.vol })); } catch (e) { /* ignore */ } }
+function saveAnn() { try { localStorage.setItem('mtb.ann', JSON.stringify({ on: ANN.on, comm: ANN.comm, chat: ANN.chat, gender: ANN.gender, vol: ANN.vol, invite: ANN.invite, inviteSec: ANN.inviteSec })); } catch (e) { /* ignore */ } }
+// 📣 ชวนกดติดตาม + บอกวิธีเล่น: พูดวนทุก ANN.inviteSec วินาที (+ ข้อความจางๆ บนจอ) · ประโยคตามแบบการแข่งตอนนี้ ไม่ซ้ำติดกัน
+const INVITE = { last: 0, i: 0 };
+function inviteLines() {
+  const L = ['กดติดตาม เพื่อเข้าร่วมแข่ง ได้นักปั่นชื่อของคุณ พร้อมรูปโปรไฟล์ทันที{k}', 'ใครยังไม่กดติดตาม กดเลย แล้วมาแข่งกัน{k}', 'กดหัวใจรัวๆ ช่วยให้นักปั่นของคุณมีแรง{k}', 'ส่งของขวัญ นักปั่นของคุณพุ่งขึ้นนำทันที ยิ่งแพงยิ่งไปไกล{k}', 'แชร์ไลฟ์ให้เพื่อน มาแข่งกันหลายๆ คน สนุกกว่า{k}'];
+  if (MODE !== 'race') return ['กดติดตาม และส่งของขวัญ ให้นักปั่นทำท่าเจ๋งๆ{k}', 'พิมพ์เลข 1 ถึง 6 ในแชท เพื่อเลือกเชียร์นักปั่น{k}', 'กดหัวใจครบร้อย นักปั่นกระโดดให้ดู{k}'];
+  if (RTYPE === 'nation') L.push('โหมดทีมชาติ กดติดตามแล้ว จะได้เข้าทีมชาติ ทีมไหนเข้าเส้นชัยก่อนชนะ{k}');
+  if (RTYPE === 'survival' || RTYPE === 'nation') L.push(`เคาะจอครบ ${LIKE_LEAD} ครั้ง ลุ้นพุ่งขึ้นนำ{k}`);
+  if (RTYPE === 'fair') L.push(`แฟร์เกม ทุกของขวัญ เร่งได้ ${FAIR_BOOST_S} วินาทีเท่ากัน เคาะจอครบ ${LIKE_LEAD} ก็เร่งได้{k}`);
+  if (RTYPE === 'prank') L.push(`โหมดกลั่นแกล้ง ส่งของขวัญ แกล้งคนข้างหน้าให้หยุด เคาะจอครบ ${LIKE_LEAD} ปาเปลือกกล้วย{k}`);
+  if (RTYPE === 'classic') L.push('ส่งของขวัญ ช่วยตัวเอง ช่วยคนอื่น หรือแกล้งคนข้างหน้า ก็ได้{k}');
+  const mins = RACE.stage ? Math.round(RACE.stage.durationMs / 60000) : 15;
+  L.push(`แข่งรอบละ ${mins} นาที ใครเข้าเส้นชัยก่อนชนะ{k}`);
+  return L;
+}
+setInterval(() => {
+  if (PANEL || !ANN.invite || !S.started || S.paused || SP.on || RACE.podium) return;
+  const now = performance.now();
+  if (now - INVITE.last < ANN.inviteSec * 1000) return;
+  INVITE.last = now;
+  const lines = inviteLines(), line = lines[INVITE.i++ % lines.length];
+  const was = ANN.on; ANN.on = true;   // ปุ่มนี้แยกจากปุ่มประกาศเหตุการณ์
+  announce('invite', line);
+  ANN.on = was;
+  toast('📣 ' + pol(line).replace(/\s+/g, ' '), '#f8bbd0');
+}, 1000);
 // 🎙️ ระดับเสียงผู้ประกาศ 0-100% (สไลด์ในแผงผู้ดูแล) · เปลี่ยนเสียงที่กำลังพูดอยู่ทันที
 function setAnnVol(v) {
   ANN.vol = clamp(v, 0, 1);
@@ -1155,7 +1180,7 @@ const ANNQ = [], ANN_LAST = {};
 let annBusy = false, annBusyUntil = 0;
 // เว้นระยะขั้นต่ำต่อชนิด (วินาที) กันพูดรัว · ลำดับความสำคัญ: สูง = พูดก่อน และไม่ถูกตัดทิ้งตอนคิวยาว
 const ANN_GAP = { join: 12, chat: 8, like: 25, rejoin: 10, viewers: 30, lead: 10, comm: 0, tip: 0 };
-const ANN_PRIO = { follow: 3, gift: 3, sub: 3, superfan: 3, chest: 3, win: 3, share: 2, question: 2, pk: 2, race: 2, lead: 2, rejoin: 1, viewers: 1, like: 1, chat: 1, comm: 1, tip: 0, join: 0 };
+const ANN_PRIO = { follow: 3, gift: 3, sub: 3, superfan: 3, chest: 3, win: 3, share: 2, question: 2, pk: 2, race: 2, lead: 2, invite: 1, rejoin: 1, viewers: 1, like: 1, chat: 1, comm: 1, tip: 0, join: 0 };
 const FEMALE_RE = /premwadee|achara|kanya|pattara|female|ผู้หญิง|หญิง/i, MALE_RE = /niwat|\bmale\b|ผู้ชาย|ชาย/i;
 function thaiVoices() { try { return speechSynthesis.getVoices().filter(v => /^th/i.test(v.lang)); } catch (e) { return []; } }
 // เลือกเสียงตามเพศ: มีเสียงตรงเพศ → ใช้เลย · มีเสียงไทยเสียงเดียว → ปรับระดับเสียงแทน (หญิงสูง / ชายต่ำ)
@@ -4921,8 +4946,8 @@ function toggleAdmin() {
 // ---- หน้า /admin: ส่งคำสั่ง / รับสถานะจากหน้าเกมผ่านเซิร์ฟเวอร์
 const REMOTE = { on: new Set(), age: -1, mode: null, pend: new Map() };
 // กดปุ่มในหน้า /admin แล้วติดไฟทันที (เดาผลไว้ก่อน) ไม่ต้องรอหน้าเกมตอบกลับ — หน้าเกมยืนยันแล้วค่อยใช้ค่าจริง
-const PRED_SINGLE = new Set(['mode', 'track', 'cohesion', 'sharp', 'rtype', 'camstyle', 'pack', 'action', 'tmode', 'host', 'vgender', 'fontsz', 'rmin', 'outfit']);
-const PRED_TOGGLE = new Set(['space', 'pause', 'music', 'voice', 'flist', 'gifts', 'regroup', 'ann', 'annchat', 'comm']);
+const PRED_SINGLE = new Set(['mode', 'track', 'cohesion', 'sharp', 'rtype', 'camstyle', 'pack', 'action', 'tmode', 'host', 'vgender', 'fontsz', 'rmin', 'outfit', 'invsec']);
+const PRED_TOGGLE = new Set(['space', 'pause', 'music', 'voice', 'flist', 'gifts', 'regroup', 'ann', 'annchat', 'comm', 'invite']);
 const PRED_SKIP = new Set(['sfxvol', 'envvol', 'annvol', 'bgtone', 'rspd', 'close']);
 function predictPanel(kind, val) {
   if (!ADMIN.el || PRED_SKIP.has(kind)) return;
@@ -5278,6 +5303,8 @@ function adminAct(kind, val, opt) {
     case 'music': S.musicOn = !S.musicOn; break;
     case 'voice': S.voiceOn = !S.voiceOn; break;
     case 'ann': ANN.on = !ANN.on; saveAnn(); toast(`📢 ประกาศเหตุการณ์: ${ANN.on ? 'เปิด' : 'ปิด'}`, '#e1f5fe'); if (!ANN.on) ANNQ.length = 0; break;
+    case 'invite': ANN.invite = !ANN.invite; saveAnn(); toast(`📣 ชวนติดตาม + วิธีเล่น: ${ANN.invite ? 'เปิด' : 'ปิด'}`, '#e1f5fe'); INVITE.last = performance.now() - ANN.inviteSec * 1000 + 3000; break;
+    case 'invsec': { const v = parseInt(val, 10); if ([30, 45, 60, 120].includes(v)) { ANN.inviteSec = v; saveAnn(); toast(`📣 ชวนทุก ${v} วิ`, '#e1f5fe'); } break; }
     case 'annchat': ANN.chat = !ANN.chat; saveAnn(); toast(`💬 อ่านคอมเมนต์: ${ANN.chat ? 'เปิด' : 'ปิด'}`, '#e1f5fe'); break;
     case 'comm': ANN.comm = !ANN.comm; saveAnn(); toast(`🏁 พากย์การแข่ง: ${ANN.comm ? 'เปิด' : 'ปิด'}`, '#e1f5fe'); COMM.next = 3; break;
     case 'vgender':
@@ -5333,6 +5360,8 @@ function adminActive(kind, val) {
     case 'rmin': return !!RACE.stage && Math.round(RACE.stage.durationMs / 60000) === parseInt(val, 10);
     case 'ann': return ANN.on;
     case 'annchat': return ANN.chat;
+    case 'invite': return ANN.invite;
+    case 'invsec': return ANN.inviteSec === parseInt(val, 10);
     case 'comm': return ANN.comm;
     case 'vgender': return ANN.gender === val;
     case 'gifts': { const p = $id('giftPanel'); return !!p && !p.classList.contains('hidden'); }
@@ -5450,6 +5479,9 @@ function renderAdmin() {
   <div class="row">🎙️ ผู้ประกาศ (อ่านออกเสียงภาษาไทย):</div>
   <div class="grid">${btn('ann', '', '📢 ประกาศเหตุการณ์ (ติดตาม/ของขวัญ/แชร์/คนเข้า)')}${btn('annchat', '', '💬 อ่านคอมเมนต์')}${btn('comm', '', '🏁 พากย์การแข่งอัตโนมัติ')}${btn('anntest', '', '🔊 ทดสอบเสียง')}</div>
   <div class="grid">${btn('vgender', 'f', '👩 เสียงผู้หญิง')}${btn('vgender', 'm', '👨 เสียงผู้ชาย')}</div>
+  <div class="grid one">${btn('invite', '', '📣 ชวนกดติดตาม + บอกวิธีเล่น (พูดวน + ข้อความบนจอ)')}</div>
+  <div class="row">ความถี่การชวน/บอกวิธีเล่น:</div>
+  <div class="grid">${['30', '45', '60', '120'].map(v => btn('invsec', v, `⏱️ ทุก ${+v >= 60 ? (+v / 60) + ' นาที' : v + ' วิ'}`)).join('')}</div>
   <div class="vol">🎙️ เสียงผู้ประกาศ <input type="range" class="annVol" min="0" max="100" step="5" value="${Math.round(ANN.vol * 100)}"> <b class="annVolTxt">${ANN.vol > 0 ? Math.round(ANN.vol * 100) + '%' : 'ปิด'}</b></div>
   <div class="row" style="opacity:.75">มีเสียงไทยในเครื่อง → ใช้เสียงเครื่อง · ไม่มี → ใช้เสียงไทยออนไลน์ (Google) ผ่านเซิร์ฟเวอร์ เล่นในหน้าต่างเกม · เสียงผู้ชาย = ปรับเสียงต่ำลง · ต้องแตะจอเกม 1 ครั้งก่อน (ถ้าไม่ได้เปิดด้วย start-game-chrome.bat) · ผู้ประกาศพูดอยู่ นักปั่นจะไม่บ่นแทรก</div>
   <div class="vol">🔊 เสียงเอฟเฟกต์ <input type="range" class="sfxVol" min="0" max="100" step="5" value="${Math.round(SFX_VOL * 100)}"> <b class="sfxVolTxt">${SFX_VOL > 0 ? Math.round(SFX_VOL * 100) + '%' : 'ปิด'}</b></div>

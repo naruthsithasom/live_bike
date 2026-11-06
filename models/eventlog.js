@@ -31,8 +31,9 @@ function toJsonSafe(obj) {
 function userOf(d) {
   if (!d || typeof d !== 'object') return null;
   const u = d.user || d.userInfo || (d.common && d.common.user) || null;
-  if (!u || (!u.uniqueId && !u.nickname)) return null;
-  return { id: u.uniqueId || '', nick: u.nickname || u.uniqueId || '' };
+  if (!u || (!u.uniqueId && !u.displayId && !u.nickname)) return null;
+  const id = u.uniqueId || u.displayId || '';
+  return { id, nick: u.nickname || id };
 }
 function pick(...v) { return v.find(x => x !== undefined && x !== null && x !== '') }
 // สรุปสั้นๆ เป็นภาษาไทยตามชนิดเหตุการณ์
